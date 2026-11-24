@@ -1,0 +1,20 @@
+name: health_guardians
+description: "HealthGuardians - an AI humanoid face for daily health check-ins (Android, landscape). Same toolchain as uxpro/fluffybytes; signs in with Fluffy Bytes accounts on the production database."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

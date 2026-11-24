@@ -1,0 +1,33 @@
+# Flutter/Dart tooling
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# IDE
+.idea/
+*.iml
+
+# Android
+android/local.properties
+android/key.properties
+android/app/*.jks
+android/app/*.keystore
+
+# iOS/macOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/flutter_export_environment.sh
+macos/Flutter/ephemeral/
+
+# Windows/Linux desktop
+windows/flutter/ephemeral/
+linux/flutter/ephemeral/
+
+
+
+# WAV files exported by tool/export_sounds.dart
+build_sounds/
