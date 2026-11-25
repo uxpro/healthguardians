@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cookies and stored data - Health Guardians</title>
+<meta name="description" content="What this website stores in your browser.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/hg.css">
+<script type="module" src="assets/js/site.js"></script>
+</head>
+<body>
+<header id="site-header"></header>
+<main class="page" id="main">
+<section><p class="kicker">Legal</p><h1>Cookies and stored data</h1>
+<p class="lead">This website sets no cookies for tracking or advertising. It keeps three items in your browser's local storage,
+all of them needed for the site to work.</p></section>
+<section>
+  <table class="brut">
+    <thead><tr><th>Name</th><th>Purpose</th><th>Kept until</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">hg.session</td><td>Your sign-in session (access token) for the dashboards</td><td>You sign out, or the session expires</td></tr>
+      <tr><td class="mono">hg.consent</td><td>Remembers that you have seen the notice about stored data</td><td>You clear your browser data</td></tr>
+      <tr><td class="mono">hg.a11y</td><td>Your accessibility settings: text size, contrast, motion, links</td><td>You reset them or clear your browser data</td></tr>
+    </tbody>
+  </table>
+</section>
+<section class="card"><h2>How to remove them</h2><p>Sign out to remove the session. To remove everything, clear this
+site's data in your browser settings.</p><button class="btn" id="forget-choice">Show the notice again</button></section>
+<script type="module">
+  import { storage } from './assets/js/storage.js';
+  document.getElementById('forget-choice').addEventListener('click', () => { storage.remove('hg.consent'); location.reload(); });
+</script>
+</main>
+<footer id="site-footer"></footer>
+</body>
+</html>

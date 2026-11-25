@@ -27,6 +27,12 @@ on the first run.
 It creates `public.hg_events`. Without it, the face still works, but the status line says that events
 are not saved.
 
+## Website and dashboards
+
+The public website and the two web dashboards (customer and logistics) are in [`website/`](website/README.md):
+static files for GitHub Pages, reading the same production database with the same accounts. Events this app writes
+with the `nc@hg.com` account appear there as events of Humanoid OEM B UUID.
+
 ## The face
 
 | Mode | Colour | Motion | Sound |
