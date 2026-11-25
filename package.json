@@ -1,0 +1,9 @@
+{
+  "name": "healthguardians-website",
+  "private": true,
+  "type": "module",
+  "description": "Static website and dashboards of Health Guardians (no build step; served as-is by GitHub Pages).",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}
