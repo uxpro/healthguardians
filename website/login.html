@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in - Health Guardians</title>
+<meta name="description" content="Sign in to the Health Guardians dashboards.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/hg.css">
+<script type="module" src="assets/js/site.js"></script>
+<script type="module" src="assets/js/login.js"></script>
+</head>
+<body>
+<header id="site-header"></header>
+<main class="page" id="main">
+<section class="hero">
+  <div>
+    <p class="kicker">Customers and HG staff</p>
+    <h1>Sign <span class="accent">in.</span></h1>
+    <p class="lead">Customers see their clinic's humanoids and events. HG logistics staff see the whole fleet.</p>
+    <p class="muted">Accounts are created by HG Group. There is no public sign-up.</p>
+  </div>
+  <form class="card" id="login-form" novalidate>
+    <h2>Dashboard sign in</h2>
+    <div class="field">
+      <label for="email">E-mail</label>
+      <input id="email" name="email" type="email" autocomplete="username" required maxlength="120">
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="200">
+    </div>
+    <div class="row">
+      <button class="btn primary" type="submit" id="login-btn">Sign in <span class="arrow"></span></button>
+      <label class="row" style="margin:0;font-weight:600"><input type="checkbox" id="show-pw" style="width:auto;box-shadow:none"> Show password</label>
+    </div>
+    <p id="login-msg" role="alert" class="notice error" hidden style="margin-top:16px"></p>
+  </form>
+</section>
+</main>
+<footer id="site-footer"></footer>
+</body>
+</html>

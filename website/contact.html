@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact and support - Health Guardians</title>
+<meta name="description" content="Contact Health Guardians.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/hg.css">
+<script type="module" src="assets/js/site.js"></script>
+</head>
+<body>
+<header id="site-header"></header>
+<main class="page" id="main">
+<section><p class="kicker">Contact</p><h1>Contact and support</h1>
+<p class="lead">Questions about renting a humanoid, a running deployment or a partnership: we are happy to help.</p></section>
+<section class="grid cols-3">
+  <div class="card"><h3>Sales</h3><p>Rent humanoids for your clinic.</p><p class="mono">sales@healthguardians.example</p></div>
+  <div class="card"><h3>Customer support</h3><p>Mon-Fri 8:00-18:00; humanoid emergencies 24/7.</p><p class="mono">support@healthguardians.example</p></div>
+  <div class="card"><h3>Partners</h3><p>OEMs and pilot clinics.</p><p class="mono">partners@healthguardians.example</p></div>
+</section>
+<section class="card">
+  <h2>Send us a message</h2>
+  <p class="notice warn">Demo website: this form does not send anything.</p>
+  <form id="contact-form" class="grid cols-2" style="margin-top:16px" novalidate>
+    <div class="field"><label for="c-name">Name</label><input id="c-name" name="name" autocomplete="name" required maxlength="80"></div>
+    <div class="field"><label for="c-email">E-mail</label><input id="c-email" name="email" type="email" autocomplete="email" required maxlength="120"></div>
+    <div class="field"><label for="c-topic">Topic</label><select id="c-topic" name="topic"><option>Renting humanoids</option><option>Support for a deployment</option><option>Partnership</option><option>Something else</option></select></div>
+    <div class="field" style="grid-column:1/-1"><label for="c-msg">Message</label><textarea id="c-msg" name="message" rows="5" required maxlength="2000"></textarea></div>
+    <div class="row" style="grid-column:1/-1"><button class="btn primary" type="submit">Send <span class="arrow"></span></button><p id="contact-result" role="status" style="margin:0"></p></div>
+  </form>
+</section>
+<script type="module">
+  const f = document.getElementById('contact-form');
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const out = document.getElementById('contact-result');
+    if (!f.checkValidity()) { out.textContent = 'Please fill in name, a valid e-mail and a message.'; f.reportValidity(); return; }
+    out.textContent = 'Thank you. In this demo nothing was sent.';
+    f.reset();
+  });
+</script>
+</main>
+<footer id="site-footer"></footer>
+</body>
+</html>
