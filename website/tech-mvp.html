@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tech. MVP - Health Guardians</title>
+<meta name="description" content="Technical MVP of Health Guardians: Roha2212 hardware, the HealthGuardians app standing in for the Sovereign Care Gateway, the database and the dashboards, and the gap to the full solution.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/hg.css">
+<script type="module" src="assets/js/site.js"></script>
+</head>
+<body>
+<header id="site-header"></header>
+<main class="page" id="main">
+<section>
+  <p class="kicker">Built at RobotHack</p>
+  <h1>Tech. MVP</h1>
+  <p class="lead" style="margin-top:20px">What runs today, end to end: a 3D-printed robot head with a phone as its face
+  talks with a patient, every step of the conversation lands in the database within seconds, and the clinic and
+  logistics dashboards show it live. The phone app <b>stands in for the Sovereign Care Gateway</b>: it plays the gateway's
+  role, without the gateway's hardware security.</p>
+</section>
+
+<section>
+  <div class="section-title"><h2>Roha2212: the hardware</h2><span class="chip green">working prototype</span></div>
+  <div class="mvp-hw">
+    <figure class="hw-photo">
+      <img src="assets/img/Roha2212.jpeg" alt="Roha2212: black 3D-printed head with a phone face showing purple honeycomb eyes, on a stepper motor and a wooden tripod" width="571" height="571">
+      <span class="pin" style="left:50%;top:13%">1</span>
+      <span class="pin" style="left:56%;top:44%">2</span>
+      <span class="pin" style="left:30%;top:63%">3</span>
+      <span class="pin" style="left:58%;top:79%">4</span>
+      <span class="pin" style="left:48%;top:95%">5</span>
+    </figure>
+    <ol class="hw-list">
+      <li><b>Head</b><span>3D-printed in PLA, 169 mm wide, with the HG logo, a phone dock with snap latches and access windows for the coupler screws.</span></li>
+      <li><b>Face: Motorola Edge 60 Fusion</b><span>Runs the HealthGuardians app (Flutter): honeycomb eyes in four modes (idling, speaking, listening, action) and the recorded voice of Roha2212.</span></li>
+      <li><b>Neck coupler</b><span>Printed sleeve and fin on the motor shaft; end stops in the head limit the turn.</span></li>
+      <li><b>Stepper motor</b><span>NEMA 17 (17HM19-2004S) on an 80 mm printed mount, turning the head left and right.</span></li>
+      <li><b>Controller (below the picture)</b><span>Arduino Due with a RADDS v1.6 board and a TMC2209 driver; an AccelStepper sketch makes calm, randomised head turns with pauses of 2–4.5 s.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="section-title"><h2>Architecture today</h2><span class="chip">MVP</span></div>
+  <div class="arch">
+    <div class="arch-node">
+      <p class="kicker">Robot</p><h3>Roha2212</h3>
+      <ul><li>Phone app: face, voice clips, timed conversation</li><li>Arduino Due + RADDS + TMC2209 → stepper neck (stand-alone)</li></ul>
+    </div>
+    <div class="arch-link"><span>HTTPS<br>signed-in account token</span></div>
+    <div class="arch-node mock">
+      <p class="kicker">Mock of the Sovereign Care Gateway</p><h3>App as gateway</h3>
+      <ul><li>Signs in as the clinic's robot account</li><li>Writes each check-in step as an event</li><li>Keeps up to 50 events while offline</li></ul>
+    </div>
+    <div class="arch-link"><span>REST<br>row-level security</span></div>
+    <div class="arch-node">
+      <p class="kicker">Database (Supabase / Postgres)</p><h3>Events &amp; fleet</h3>
+      <ul><li><code>hg_events</code>: app check-ins</li><li><code>hg_*</code> tables: fleet, event codes, audit log</li><li>Access only through checked functions; read-only jury account</li></ul>
+    </div>
+    <div class="arch-link"><span>polling<br>every 3 s</span></div>
+    <div class="arch-node">
+      <p class="kicker">Website (GitHub Pages)</p><h3>Dashboards</h3>
+      <ul><li>North Clinic: live Roha2212 events</li><li>Central Clinic: events simulated in the browser</li><li>Logistics: fleet, parts, reliability, audit</li></ul>
+    </div>
+  </div>
+  <p class="hint" style="margin-top:12px">No patient names anywhere: each humanoid is linked to an anonymous patient ID that only the clinic can match.</p>
+</section>
+
+<section>
+  <div class="section-title"><h2>Target architecture</h2><span class="chip">realisable solution</span></div>
+  <div class="arch target">
+    <div class="arch-node">
+      <p class="kicker">Robots</p><h3>Open ROS 2 fleet</h3>
+      <ul><li>Wheeled two-arm robots from several vendors</li><li>Isolated clinic subnet, ROS 2 / VDA 5050</li></ul>
+    </div>
+    <div class="arch-link"><span>local<br>ROS 2 topics</span></div>
+    <div class="arch-node gw">
+      <p class="kicker">Our hardware</p><h3>Sovereign Care Gateway</h3>
+      <ul><li>Zero-trust firewall: no traffic to non-EU vendor clouds</li><li>Faces blurred and voices anonymised on site</li><li>mTLS / WireGuard tunnel, signed updates</li></ul>
+    </div>
+    <div class="arch-link"><span>encrypted,<br>anonymised</span></div>
+    <div class="arch-node">
+      <p class="kicker">EU platform (ISO 27001, BSI C5)</p><h3>Orchestration</h3>
+      <ul><li>Workflows across wards, lab, pharmacy</li><li>Step-in teleoperation, fleet health</li><li>HL7/FHIR, nurse call, lifts and doors</li></ul>
+    </div>
+    <div class="arch-link"><span>role-based<br>access</span></div>
+    <div class="arch-node">
+      <p class="kicker">Clinic and HG staff</p><h3>Dashboards</h3>
+      <ul><li>Same views as today, fed by real telemetry</li><li>"Bigger picture" bottleneck analytics</li></ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="section-title"><h2>Achieved and the gap</h2></div>
+  <div class="table-scroll" style="max-height:none"><table class="brut">
+    <thead><tr><th>Part</th><th>Achieved in the MVP</th><th>Gap to the realisable solution</th></tr></thead>
+    <tbody>
+      <tr><td><b>Robot body</b></td><td>Printed head, phone face, motorised neck on a tripod</td><td>A wheeled two-arm ROS 2 robot from an OEM; our head and face become its interaction layer</td></tr>
+      <tr><td><b>Motion</b></td><td>Stepper neck with smooth, randomised idle turns</td><td>Neck driven by the conversation and the robot controller; homing sensor instead of open-loop steps</td></tr>
+      <tr><td><b>Conversation</b></td><td>Recorded voice in step with the face modes; one timed demo script</td><td>Real dialogue with on-device speech processing, in German and Danish</td></tr>
+      <tr><td><b>Gateway</b></td><td>The app plays the gateway: it signs in and sends anonymous events</td><td>The physical Sovereign Care Gateway: zero trust, edge anonymisation, encrypted EU tunnel, CE/CRA certified</td></tr>
+      <tr><td><b>Data</b></td><td>Hosted Postgres with row-level security, rate limits, audit log, read-only jury access, timed access end</td><td>EU orchestration platform on ISO 27001 / BSI C5 servers with hospital interfaces (HL7/FHIR)</td></tr>
+      <tr><td><b>Dashboards</b></td><td>Live clinic view, simulated second clinic, logistics view with parts and reliability (mock data)</td><td>Real fleet telemetry, predictive maintenance and facility analytics</td></tr>
+    </tbody></table></div>
+  <p style="margin-top:18px"><a class="btn small" href="roadmap.html">How we close the gap: roadmap <span class="arrow"></span></a></p>
+</section>
+</main>
+<footer id="site-footer"></footer>
+</body>
+</html>
