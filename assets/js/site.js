@@ -6,11 +6,13 @@ import { storage } from './storage.js';
 export const NAV = [
   ['about.html', 'About'],
   ['business-model.html', 'Business model'],
+  ['roadmap.html', 'Roadmap'],
   ['use-cases.html', 'Use cases'],
   ['partners.html', 'Partners'],
   ['success-stories.html', 'Stories'],
   ['faq.html', 'FAQ'],
   ['contact.html', 'Contact'],
+  ['tech-mvp.html', 'Tech. MVP'],
 ];
 
 export const LOGO_SVG = `<svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
@@ -60,7 +62,7 @@ export function renderFooter(el) {
         <p class="mono">HG Group (demo company)<br>Registered office: to be confirmed<br>support@healthguardians.example</p>
       </div>
       <div><h4>Company</h4><ul>
-        <li><a href="about.html">About us</a></li><li><a href="business-model.html">Business model</a></li>
+        <li><a href="about.html">About us</a></li><li><a href="business-model.html">Business model</a></li><li><a href="roadmap.html">Roadmap</a></li><li><a href="tech-mvp.html">Tech. MVP</a></li>
         <li><a href="success-stories.html">Success stories</a></li><li><a href="careers.html">Careers</a></li>
       </ul></div>
       <div><h4>Customers</h4><ul>
