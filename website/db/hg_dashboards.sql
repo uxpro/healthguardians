@@ -46,7 +46,7 @@ create policy hg_events_read_own on public.hg_events for select to authenticated
 --     through the hg_* functions below, which check the caller's JWT (auth.uid()).
 --   * Accounts without an active profile (banned) get nothing, as everywhere else in the project.
 --   * The phone app keeps writing public.hg_events as before. Events of the account linked to a humanoid
---     (nc@hg.com -> Humanoid_OEM_B_UUID) are shown as that humanoid's events.
+--     (nc@hg.com -> Roha2212) are shown as that humanoid's events.
 begin;
 
 -- ------------------------------------------------------------------------------------------------ tables
@@ -85,7 +85,7 @@ create table if not exists public.hg_models (
 
 create table if not exists public.hg_humanoids (
   id                 uuid primary key,
-  label              text not null unique check (label ~ '^Humanoid_OEM_[A-Z]_UUID(_[0-9]{1,3})?$'),
+  label              text not null unique check (label ~ '^(Humanoid_OEM_[A-Z]_UUID(_[0-9]{1,3})?|[A-Z][A-Za-z]{1,15}[0-9]{1,6})$'),
   model_id           text not null references public.hg_models (id),
   customer_id        text references public.hg_customers (id),
   instance_status    text not null check (instance_status in ('deployed', 'in_stock', 'maintenance', 'in_transit')),
@@ -101,6 +101,11 @@ create table if not exists public.hg_humanoids (
   constraint hg_humanoids_deployed check ((instance_status = 'deployed') = (customer_id is not null)),
   constraint hg_humanoids_patient  check (demo_patient_uuid is null or instance_status = 'deployed')
 );
+-- Named humanoids (e.g. Roha2212) next to the placeholder labels; also widens the check on an existing table.
+alter table public.hg_humanoids drop constraint if exists hg_humanoids_label_check;
+alter table public.hg_humanoids add constraint hg_humanoids_label_check
+  check (label ~ '^(Humanoid_OEM_[A-Z]_UUID(_[0-9]{1,3})?|[A-Z][A-Za-z]{1,15}[0-9]{1,6})$');
+
 
 create table if not exists public.hg_event_codes (
   code  smallint primary key check (code between 0 and 255),
@@ -430,7 +435,7 @@ begin
     values (v_ad, 'admin', null, 'HG logistics')
     on conflict (user_id) do update set hg_role = 'admin', customer_id = null;
   end if;
-  update public.hg_humanoids set linked_user_id = v_nc where label = 'Humanoid_OEM_B_UUID';
+  update public.hg_humanoids set linked_user_id = v_nc where id = 'b2d4f6a8-0c1e-4f3a-9b5d-7e9f1a3c5e55';   -- Roha2212
   return jsonb_build_object('cc@hg.com', v_cc is not null, 'nc@hg.com', v_nc is not null,
                             'admin@hg.com', v_ad is not null);
 end $$;
@@ -499,8 +504,8 @@ insert into public.hg_humanoids (id, label, model_id, customer_id, instance_stat
   ('5a9d4e2b-1c7f-4d3e-8a62-9b1e0f3c5d22', 'Humanoid_OEM_A_UUID_2', 'OEM_A_VARIANT_A', 'central-clinic', 'deployed',  640, 'yellow', 7.0, 4310, 'passed_with_warnings', current_date - 1,  current_date + 6,  '2c4e6a8b-0d1f-4e3a-9b5c-7d9e1f3a5b62'),
   ('7c1e5f3a-2d8b-4e4f-9b73-0c2f1a4d6e33', 'Humanoid_OEM_C_UUID',   'OEM_C_VARIANT_A', 'central-clinic', 'deployed', 3380, 'green', 11.0,  960, 'passed',               current_date - 6,  current_date + 70, '4e6a8c0d-2f1b-4a5c-8d7e-9f1a3b5c7d73'),
   ('9e3a7b5c-4f0d-4a6b-8c84-1d3a2b5e7f44', 'Humanoid_OEM_D_UUID',   'OEM_D_VARIANT_A', 'central-clinic', 'deployed',   72, 'red',    3.5, 6020, 'failed',               current_date,      current_date + 1,  '6a8c0e2f-4b3d-4c7e-9f1a-1b3c5d7e9f84'),
-  -- North Clinic: three OEM B humanoids; Humanoid_OEM_B_UUID is live (linked to nc@hg.com)
-  ('b2d4f6a8-0c1e-4f3a-9b5d-7e9f1a3c5e55', 'Humanoid_OEM_B_UUID',   'OEM_B_VARIANT_A', 'north-clinic',   'deployed', 2870, 'green', 10.5, 1240, 'passed',               current_date - 2,  current_date + 55, 'd1e3f5a7-9b2c-4d6e-8f0a-2c4e6a8b0d95'),
+  -- North Clinic: three OEM B humanoids; Roha2212 is live (linked to nc@hg.com, runs the HealthGuardians app)
+  ('b2d4f6a8-0c1e-4f3a-9b5d-7e9f1a3c5e55', 'Roha2212',              'OEM_B_VARIANT_A', 'north-clinic',   'deployed', 2870, 'green', 10.5, 1240, 'passed',               current_date - 2,  current_date + 55, 'd1e3f5a7-9b2c-4d6e-8f0a-2c4e6a8b0d95'),
   ('c4f6a8b0-2e3d-4a5b-8c7d-9f1b3d5f7a66', 'Humanoid_OEM_B_UUID_2', 'OEM_B_VARIANT_A', 'north-clinic',   'deployed', 1960, 'green',  9.0, 2150, 'passed',               current_date - 4,  current_date + 33, 'e3f5a7b9-1d4e-4f8a-9b2c-4e6a8c0e2f06'),
   ('d6a8b0c2-4f5e-4b6c-9d8e-0a2c4e6a8b77', 'Humanoid_OEM_B_UUID_3', 'OEM_B_VARIANT_A', 'north-clinic',   'deployed',  410, 'yellow', 6.5, 5480, 'passed_with_warnings', current_date - 1,  current_date + 4,  'f5a7b9c1-3e6f-4a0b-8c4d-6e8a0c2e4f17'),
   -- HG warehouse and service
@@ -529,8 +534,8 @@ from (values
   ('Humanoid_OEM_D_UUID',   400, 'Commissioning and safety check',  ''),
   ('Humanoid_OEM_D_UUID',   150, 'Wheel base vibration',            'Drive wheel set'),
   ('Humanoid_OEM_D_UUID',     1, 'System test failed: battery cell', ''),
-  ('Humanoid_OEM_B_UUID',   120, 'Commissioning and safety check',  ''),
-  ('Humanoid_OEM_B_UUID',    30, 'Firmware update 4.2',             ''),
+  ('Roha2212',              120, 'Commissioning and safety check',  ''),
+  ('Roha2212',               30, 'Firmware update 4.2',             ''),
   ('Humanoid_OEM_B_UUID_2', 180, 'Commissioning and safety check',  ''),
   ('Humanoid_OEM_B_UUID_3', 365, 'Commissioning and safety check',  ''),
   ('Humanoid_OEM_B_UUID_3',  45, 'Microphone dropouts',             'Microphone array'),
@@ -543,9 +548,9 @@ join public.hg_humanoids h on h.label = d.label;
 insert into public.hg_robot_events (humanoid_id, code, payload, source, created_at)
 select h.id, d.code, d.payload::jsonb, 'robot', now() - d.ago
 from (values
-  ('Humanoid_OEM_B_UUID',   8,  '{"note":"Daily self test"}',          interval '20 hours'),
-  ('Humanoid_OEM_B_UUID',   7,  '{"note":"Hydration reminder"}',       interval '6 hours'),
-  ('Humanoid_OEM_B_UUID',   0,  '{}',                                  interval '3 hours'),
+  ('Roha2212',              8,  '{"note":"Daily self test"}',          interval '20 hours'),
+  ('Roha2212',              7,  '{"note":"Hydration reminder"}',       interval '6 hours'),
+  ('Roha2212',              0,  '{}',                                  interval '3 hours'),
   ('Humanoid_OEM_B_UUID_2', 8,  '{"note":"Daily self test"}',          interval '19 hours'),
   ('Humanoid_OEM_B_UUID_2', 64, '{"value":"27.4 °C"}',                 interval '5 hours'),
   ('Humanoid_OEM_B_UUID_3', 0,  '{}',                                  interval '2 hours'),

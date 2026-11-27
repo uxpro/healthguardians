@@ -11,7 +11,7 @@ select test.assert((select public.hg_link_demo_accounts()) = '{"cc@hg.com": true
                    'demo accounts linked');
 insert into public.hg_members (user_id, hg_role, customer_id) values ('a0000000-0000-0000-0000-0000000000b1', 'user', 'north-clinic');
 update public.profiles set status = 'banned' where id = 'a0000000-0000-0000-0000-0000000000b1';
-select test.assert((select linked_user_id from public.hg_humanoids where label = 'Humanoid_OEM_B_UUID')
+select test.assert((select linked_user_id from public.hg_humanoids where label = 'Roha2212')
                    = 'a0000000-0000-0000-0000-0000000000c2', 'Humanoid OEM B linked to nc@hg.com');
 select test.assert((select count(*) from public.hg_humanoids) = 12, '12 humanoids');
 select test.assert((select count(*) from public.hg_humanoids where customer_id = 'central-clinic') = 4, 'Central Clinic has 4');
@@ -23,8 +23,8 @@ select test.expect_error($$insert into public.hg_event_codes values (10, 'EMERGE
 select test.expect_error($$insert into public.hg_event_codes values (256, 'EMERGENCY', 'too big')$$, 'check constraint');
 select test.expect_error($$insert into public.hg_members (user_id, hg_role) values ('a0000000-0000-0000-0000-0000000000f1', 'user')$$, 'check constraint');
 select test.expect_error($$insert into public.hg_members (user_id, hg_role, customer_id) values ('a0000000-0000-0000-0000-0000000000f1', 'owner', 'north-clinic')$$, 'check constraint');
-select test.expect_error($$update public.hg_humanoids set customer_id = null where label = 'Humanoid_OEM_B_UUID'$$, 'check constraint');
-select test.expect_error($$update public.hg_humanoids set label = 'robot; drop table x' where label = 'Humanoid_OEM_B_UUID'$$, 'check constraint');
+select test.expect_error($$update public.hg_humanoids set customer_id = null where label = 'Roha2212'$$, 'check constraint');
+select test.expect_error($$update public.hg_humanoids set label = 'robot; drop table x' where label = 'Roha2212'$$, 'check constraint');
 
 -- -------------------------------------------------------------- anonymous: nothing
 select test.login(null);
@@ -80,11 +80,11 @@ insert into public.hg_events (session_id, event_type, mode, question, answer)
 select test.assert((select count(*) from public.hg_feed(now() - interval '1 minute')) = 3, 'app events appear in the feed');
 select test.assert((select string_agg(code::text || ':' || type, ',' order by code) from public.hg_feed(now() - interval '1 minute'))
                    = '1:KEEP_ALIVE,200:EMERGENCY,201:EMERGENCY', 'app answers mapped to codes');
-select test.assert((select bool_and(label = 'Humanoid_OEM_B_UUID' and source = 'app') from public.hg_feed(now() - interval '1 minute')),
+select test.assert((select bool_and(label = 'Roha2212' and source = 'app') from public.hg_feed(now() - interval '1 minute')),
                    'app events belong to Humanoid OEM B');
 select test.assert((select payload ->> 'answer' from public.hg_feed(now() - interval '1 minute') where code = 200) = 'not_good',
                    'customer sees the payload');
-select test.assert((select (x ->> 'events_today')::int from jsonb_array_elements(public.hg_fleet()) x where x ->> 'label' = 'Humanoid_OEM_B_UUID') >= 3,
+select test.assert((select (x ->> 'events_today')::int from jsonb_array_elements(public.hg_fleet()) x where x ->> 'label' = 'Roha2212') >= 3,
                    'events today counted');
 
 -- demo injection on its own humanoid
@@ -126,7 +126,7 @@ select test.assert(public.hg_whoami() ->> 'role' = 'admin', 'admin role');
 select test.assert(public.hg_whoami() -> 'customer' = 'null'::jsonb, 'admin has no customer');
 select test.assert(jsonb_array_length(public.hg_fleet()) = 12, 'admin sees the whole fleet');
 select test.assert(not exists (select 1 from jsonb_array_elements(public.hg_fleet()) x where x ? 'demo_patient_uuid'), 'admin never sees patients');
-select test.assert((select (x ->> 'in_stock_same_model')::int from jsonb_array_elements(public.hg_fleet()) x where x ->> 'label' = 'Humanoid_OEM_B_UUID') = 1,
+select test.assert((select (x ->> 'in_stock_same_model')::int from jsonb_array_elements(public.hg_fleet()) x where x ->> 'label' = 'Roha2212') = 1,
                    'in stock count of the same model');
 select test.assert((select jsonb_array_length(x -> 'history') from jsonb_array_elements(public.hg_fleet()) x where x ->> 'label' = 'Humanoid_OEM_A_UUID_2') = 3,
                    'service history for admin');
@@ -152,5 +152,5 @@ reset role;
 delete from auth.users where email = 'nc@hg.com';
 select test.assert(not exists (select 1 from public.hg_members where hg_role = 'user' and customer_id = 'north-clinic'
                                 and user_id = 'a0000000-0000-0000-0000-0000000000c2'), 'membership removed with the account');
-select test.assert((select linked_user_id from public.hg_humanoids where label = 'Humanoid_OEM_B_UUID') is null, 'link cleared');
+select test.assert((select linked_user_id from public.hg_humanoids where label = 'Roha2212') is null, 'link cleared');
 select test.assert(exists (select 1 from public.hg_audit_log where email = 'nc@hg.com' and user_id is null), 'audit lines kept');

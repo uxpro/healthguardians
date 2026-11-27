@@ -104,3 +104,8 @@ export const CHECK_IN = [
   { say: 'Great you did it!' },
   { finish: true },
 ];
+
+// Real photos of named humanoids (others show a placeholder drawing).
+export const PHOTOS = {
+  Roha2212: { src: 'assets/img/Roha2212.jpeg', alt: 'Roha2212: the 3D-printed HealthGuardians head with a phone as its face, on a stepper-motor neck' },
+};

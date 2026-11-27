@@ -31,7 +31,7 @@ are not saved.
 
 The public website and the two web dashboards (customer and logistics) are in [`website/`](website/README.md):
 static files for GitHub Pages, reading the same production database with the same accounts. Events this app writes
-with the `nc@hg.com` account appear there as events of Humanoid OEM B UUID.
+with the `nc@hg.com` account appear there as events of the live demo humanoid Roha2212.
 
 ## The face
 

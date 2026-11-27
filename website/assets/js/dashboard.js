@@ -9,7 +9,7 @@ import { renderA11yWidget } from './site.js';
 import {
   humanize, escapeHtml as e, fmtDate, fmtTime, fmtDateTime, fmtHours, isToday, typeClass, flagText, payloadText, toCsv,
 } from './format.js';
-import { FEATURES, INJECT_BUTTONS, REMINDERS, TECHNICIANS, sparePartsFor, warehouseRows } from './data.js';
+import { FEATURES, INJECT_BUTTONS, PHOTOS, REMINDERS, TECHNICIANS, sparePartsFor, warehouseRows } from './data.js';
 import { createCentralSimulator, environment, reliability } from './sim.js';
 import { lineChart, barChart, eventsPerHour } from './charts.js';
 import { robotSvg } from './robot-art.js';
@@ -398,14 +398,21 @@ function humanoidSelect() {
       `<option value="${e(h.id)}" ${h.id === S.selectedId ? 'selected' : ''}>${e(humanize(h.label))} · ${e(humanize(h.model_id))}${h.live ? ' · live' : ''}</option>`).join('')}</select>`;
 }
 
+function robotPicture(h, { line = false } = {}) {
+  const photo = PHOTOS[h.label];
+  return photo ? `<img class="robot-photo" src="${e(photo.src)}" alt="${e(photo.alt)}">` : robotSvg(h, { line });
+}
+
 function robotBox(h) {
-  return box(e(humanize(h.model_id)), `<div class="dos-robot">${robotSvg(h, { line: true })}</div>
+  const photo = PHOTOS[h.label];
+  return box(photo ? `${e(humanize(h.label))} · ${e(humanize(h.model_id))}` : e(humanize(h.model_id)),
+    `<div class="dos-robot">${robotPicture(h, { line: true })}</div>
     <table class="dkv">
       <tr><th>Humanoid</th><td>${e(humanize(h.label))}</td></tr>
       <tr><th>Locomotion</th><td>${e(humanize(h.locomotion || '-'))}</td></tr>
       <tr><th>State</th><td>${chipFor('state', h.instance_status)}</td></tr>
     </table>
-    <p class="dos-hint">Placeholder drawing; the model photo follows.</p>`, { cls: 'robot-box' });
+    <p class="dos-hint">${photo ? 'Live demo humanoid: runs the HealthGuardians app.' : 'Placeholder drawing; the model photo follows.'}</p>`, { cls: 'robot-box' });
 }
 
 function overviewKv(h) {
@@ -668,8 +675,8 @@ function logisticsOverview() {
         <div class="card">${robotLog(h, { gateway: true })}</div>` : ''}
       </div>
       ${h ? `<aside class="span-4 stack">
-        <div class="card"><p class="kicker">${e(humanize(h.model_id))}</p><div class="robot-figure">${robotSvg(h)}</div>
-          <p class="hint">Dummy picture; the model photo follows.</p></div>
+        <div class="card"><p class="kicker">${e(humanize(h.model_id))}</p><div class="robot-figure">${robotPicture(h)}</div>
+          <p class="hint">${PHOTOS[h.label] ? 'Photo of the live demo humanoid.' : 'Dummy picture; the model photo follows.'}</p></div>
         <div class="card"><h3>Indicators system integrity</h3>${leds(h.integrity_flag)}</div>
         <div class="card"><table class="kv">
           <tr><th>In stock (same model)</th><td><b>${h.in_stock_same_model ?? 0}</b></td></tr>

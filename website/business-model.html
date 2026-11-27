@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Business model - Health Guardians</title>
-<meta name="description" content="Working business model of Health Guardians (to be decided).">
+<meta name="description" content="Health Guardians for Elder Citizens: European sovereign Robotics-as-a-Service for hospitals and care homes. Tariffs, unit economics, rollout and funding.">
 <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/css/hg.css">
 <script type="module" src="assets/js/site.js"></script>
@@ -15,28 +15,146 @@
 <section>
   <p class="kicker">Company</p>
   <h1>Business model</h1>
-  <p class="draft-banner">To be decided: the business model is still under discussion. This page lists the working assumptions.</p>
-  <p class="lead" style="margin-top:20px">Health Guardians is a humanoids-as-a-service company. Clinics rent care
-  humanoids with the service included; HG Group owns the fleet, keeps it running and earns a recurring fee per unit.</p>
-</section>
-<section>
-  <div class="section-title"><h2>Business model canvas</h2><span class="chip yellow">Working version</span></div>
-  <div class="canvas-grid">
-    <div class="card tall"><h3>Key partners</h3><ul class="check-list"><li>Humanoid OEMs A, B, C and D</li><li>Field service technicians</li><li>Transport and logistics</li><li>Cloud hosting provider</li></ul></div>
-    <div class="card"><h3>Key activities</h3><ul class="check-list"><li>Fleet purchase and refurbishment</li><li>Deployment and on-site tests</li><li>Monitoring and predictive service</li></ul></div>
-    <div class="card tall"><h3>Value proposition</h3><ul class="check-list"><li>Falls noticed within seconds</li><li>Daily check-ins without extra staff time</li><li>No capital cost, no repair worries</li><li>No patient names leave the clinic</li></ul></div>
-    <div class="card"><h3>Customer relationships</h3><ul class="check-list"><li>Dedicated support desk</li><li>Customer dashboard</li><li>Quarterly service review</li></ul></div>
-    <div class="card tall"><h3>Customer segments</h3><ul class="check-list"><li>Clinics and hospitals</li><li>Care homes</li><li>Home-care providers (later)</li></ul></div>
-    <div class="card"><h3>Key resources</h3><ul class="check-list"><li>Humanoid fleet and warehouse</li><li>Event gateway and dashboards</li><li>Trained technicians</li></ul></div>
-    <div class="card"><h3>Channels</h3><ul class="check-list"><li>Direct sales to clinics</li><li>OEM partner referrals</li><li>Healthcare fairs</li></ul></div>
-    <div class="card wide"><h3>Cost structure</h3><ul class="check-list"><li>Fleet purchase or leasing from OEMs</li><li>Technicians, travel and spare parts</li><li>Warehouse, hosting and support</li></ul></div>
-    <div class="card wider"><h3>Revenue streams</h3><ul class="check-list"><li>Monthly rental fee per humanoid, service included</li><li>Rental period extensions</li><li>Deployment and staff training fee</li><li>Optional faster service levels</li></ul></div>
+  <p class="lead" style="margin-top:20px">Health Guardians for Elder Citizens is a European sovereign Robotics-as-a-Service
+  (RaaS) integrator. Hospitals and care homes rent two-arm service robots for a monthly fee with no upfront investment;
+  we source open ROS 2 hardware, secure it with our own Sovereign Care Gateway, connect it to the building and hospital IT,
+  and keep it running with a swap within 24 hours.</p>
+  <div class="grid cols-4" style="margin-top:28px">
+    <div class="card green"><p class="kicker">From</p><div class="big-number">€3,500</div><p style="margin:6px 0 0">per robot and month, care homes</p></div>
+    <div class="card"><p class="kicker">Gross margin</p><div class="big-number">51.9%</div><p style="margin:6px 0 0">blended, 10-robot fleet</p></div>
+    <div class="card"><p class="kicker">Hardware payback</p><div class="big-number">8–12</div><p style="margin:6px 0 0">months per robot</p></div>
+    <div class="card"><p class="kicker">Nursing time saved</p><div class="big-number">30–45</div><p style="margin:6px 0 0">minutes per shift</p></div>
   </div>
 </section>
-<section class="grid cols-2">
-  <div class="card"><h2>What we do not do</h2><ul class="check-list"><li>We do not sell humanoids or hardware.</li><li>We do not store patient names or medical records.</li><li>We do not sell or share event data.</li></ul></div>
-  <div class="card mint"><h2>Open questions</h2><ul class="check-list"><li>Price per humanoid and per use case</li><li>Minimum rental period</li><li>Service levels and response times</li><li>Which OEM models enter the fleet first</li></ul></div>
+
+<section>
+  <div class="section-title"><h2>The problem</h2></div>
+  <div class="grid cols-3">
+    <div class="card"><h3>Nurses run errands</h3><p>Up to 30% of a nursing shift goes to fetch-and-carry: water, consumables,
+      lab samples, non-urgent night calls. Staff shortages already close beds.</p></div>
+    <div class="card"><h3>Robots are hard to buy</h3><p>A two-arm assistive robot costs €35,000–€40,000+ upfront, and care
+      facilities have no mechatronics staff to run it. Cheap tray robots have no arms for doors, lifts or hand-overs.</p></div>
+    <div class="card"><h3>Data leaves Europe</h3><p>Mobile cameras and microphones talking to non-EU vendor clouds are
+      rejected by data protection officers, CISOs and works councils.</p></div>
+  </div>
 </section>
+
+<section>
+  <div class="section-title"><h2>The sovereign stack</h2><span class="chip">4 pillars</span></div>
+  <div class="grid cols-4">
+    <div class="card"><h3>1 · Open ROS 2 fleet</h3><p>Wheeled two-arm robots from several vendors (about €25,000 landed).
+      Wheels instead of legs: no fall risk, longer battery life.</p></div>
+    <div class="card mint"><h3>2 · Sovereign Care Gateway</h3><p>Our edge box (about €1,000 per robot): zero-trust firewall
+      that blocks non-EU vendor clouds, faces blurred and audio scrubbed on site, encrypted tunnel to servers in Germany/EU
+      (ISO 27001, BSI C5).</p></div>
+    <div class="card"><h3>3 · EU orchestration platform</h3><p>Connects wards, lab, pharmacy, lifts, doors, nurse call and the
+      hospital information system (HL7/FHIR, VDA 5050), with anonymised facility analytics.</p></div>
+    <div class="card"><h3>4 · Turnkey field service</h3><p>Installation, staff training, preventive maintenance and a
+      pre-configured swap robot from our regional hub within 24 hours.</p></div>
+  </div>
+  <p class="hint" style="margin-top:14px">Hardware candidates being benchmarked include AgiBot G2, Galbot G1, Galaxea R1 Pro and
+  NEURA MiPA (EU dual source). The live demo humanoid Roha2212 runs our own HealthGuardians app on a 3D-printed head.</p>
+</section>
+
+<section>
+  <div class="section-title"><h2>Three-stage rollout</h2><span class="chip">payload under 3 kg, no patient lifting</span></div>
+  <div class="grid cols-3">
+    <div class="card"><p class="kicker">Weeks 1–4</p><h3>Fetch and carry</h3><ul class="check-list"><li>Hydration rounds</li><li>Lab samples and prescriptions</li><li>Restocking gloves, disinfectant, dressings</li></ul></div>
+    <div class="card"><p class="kicker">Months 2–3</p><h3>Night shift and nurse call</h3><ul class="check-list"><li>Pre-checking night calls</li><li>Corridor patrols for falls and wandering</li></ul></div>
+    <div class="card"><p class="kicker">Month 4 +</p><h3>Fine motor and social care</h3><ul class="check-list"><li>Handing over glasses, phone, remote</li><li>Lights, curtains, wayfinding</li><li>Eye-level family video calls</li></ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="section-title"><h2>Pricing</h2><span class="chip green">0 € upfront for customers</span></div>
+  <div class="table-scroll" style="max-height:none"><table class="brut">
+    <thead><tr><th>Revenue stream</th><th>Care home (Tariff A)</th><th>Hospital (Tariff B)</th><th>Includes</th></tr></thead>
+    <tbody>
+      <tr><td><b>RaaS subscription</b></td><td>€3,500 / month</td><td>€4,800 / month</td><td>Robot, gateway, platform, maintenance, 24/7 support, &lt;24 h swap</td></tr>
+      <tr><td><b>Integration and setup (one-time)</b></td><td>€4,500</td><td>€12,000</td><td>Site survey, ward mapping, lift and door integration; hospitals: HIS/HL7/FHIR, nurse call, security</td></tr>
+      <tr><td><b>Multi-vendor SaaS licence</b></td><td>€450 / month</td><td>€450–€900 / month</td><td>Per connected third-party robot, or the hospital-wide analytics module (€900)</td></tr>
+      <tr><td><b>Paid pilot (3 months)</b></td><td>€1,900 / month</td><td>€2,500 / month</td><td>One reference ward, 2–3 stage-1 tasks; converts to a 24-month contract when the agreed time savings are met</td></tr>
+    </tbody></table></div>
+</section>
+
+<section>
+  <div class="section-title"><h2>Unit economics</h2><span class="chip">per active robot and month</span></div>
+  <div class="table-scroll" style="max-height:none"><table class="brut">
+    <thead><tr><th></th><th>Care home</th><th>Hospital</th><th>Hospital + 1 SaaS</th></tr></thead>
+    <tbody>
+      <tr><td>Revenue</td><td>€3,500</td><td>€4,800</td><td>€5,250</td></tr>
+      <tr><td>Hardware depreciation (€26,000 over 48 months)</td><td>−€542</td><td>−€542</td><td>−€542</td></tr>
+      <tr><td>Software and EU cloud</td><td>−€250</td><td>−€350</td><td>−€350</td></tr>
+      <tr><td>Field service</td><td>−€500</td><td>−€650</td><td>−€650</td></tr>
+      <tr><td>Parts, swap reserve, insurance</td><td>−€500</td><td>−€600</td><td>−€600</td></tr>
+      <tr><td><b>Gross profit</b></td><td><b>€1,708 (48.8%)</b></td><td><b>€2,658 (55.4%)</b></td><td><b>€3,108 (59.2%)</b></td></tr>
+      <tr><td>Operating cash flow</td><td>€2,250</td><td>€3,200</td><td>€3,650</td></tr>
+      <tr><td><b>Hardware cash payback</b></td><td><b>11.6 months</b></td><td><b>8.1 months</b></td><td><b>7.1 months</b></td></tr>
+    </tbody></table></div>
+  <p class="hint" style="margin-top:10px">Hardware per robot: €25,000 open ROS 2 robot + €1,000 Sovereign Care Gateway. Excludes the one-time setup fee.</p>
+</section>
+
+<section class="grid cols-2">
+  <div class="card"><h2>Starter fleet (Karlsruhe)</h2>
+    <table class="kv">
+      <tr><th>Fleet</th><td>10 active robots (6 care home, 4 hospital) + 2 swap units</td></tr>
+      <tr><th>Fleet hardware</th><td>€312,000 (12 × €26,000)</td></tr>
+      <tr><th>Spare parts and working capital</th><td>€118,000</td></tr>
+      <tr><th>Annual revenue at full use</th><td>€482,400 + €75,000 setup fees</td></tr>
+      <tr><th>Annual gross profit</th><td>€250,560 (51.9%)</td></tr>
+      <tr><th>Annual operating profit (EBIT)</th><td>€154,080</td></tr>
+      <tr><th>4-year EBIT</th><td>€616,320 (143.3% net ROI)</td></tr>
+    </table></div>
+  <div class="card green"><h2>Funding</h2>
+    <div class="big-number">€107,500</div><p style="margin:6px 0 14px">seed equity for 25%</p>
+    <table class="kv">
+      <tr><th>Asset-backed debt / leasing</th><td>€322,500 (75%)</td></tr>
+      <tr><th>Total capital</th><td>€430,000</td></tr>
+      <tr><th>Use</th><td>10-robot starter fleet, 2 swap units, spare parts, 6-month liquidity and CE buffer</td></tr>
+    </table></div>
+</section>
+
+<section>
+  <div class="section-title"><h2>Go to market</h2><span class="chip">Land &amp; expand</span></div>
+  <div class="grid cols-2">
+    <div class="card"><h3>Karlsruhe beachhead</h3><ul class="check-list">
+      <li>Multi-site non-profit care operators (20+ homes): one reference ward, then a group framework contract</li>
+      <li>Welfare associations: regional innovation and care-digitalisation grants</li>
+      <li>Private care operators: fastest pilot decisions</li>
+      <li>Hospitals in phase 2, with care-home references and full HIS integration</li></ul></div>
+    <div class="card"><h3>Who decides</h3><ul class="check-list">
+      <li>Buyers: managing and facility directors, CFOs (sales cycle 3–6 months in care, 6–12 in hospitals)</li>
+      <li>Champions: directors of nursing and ward leads</li>
+      <li>Gatekeepers: works council, data protection officer, CISO, hygiene officer, served by our compliance package</li></ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="section-title"><h2>Compliance package</h2></div>
+  <div class="grid cols-3">
+    <div class="card"><h3>GDPR</h3><p>No identifiable video or audio leaves the facility; logs hosted in Germany/EU (ISO 27001, BSI C5); DPIA support.</p></div>
+    <div class="card"><h3>EU product rules</h3><p>CE conformity under the Machinery Regulation, Cyber Resilience Act (SBOM, managed security updates), AI Act transparency. Non-medical use only, so no MDR approval is needed.</p></div>
+    <div class="card"><h3>Works council</h3><p>Process-over-person analytics: no employee IDs, no shift-roster linkage, k-anonymity, with a ready-made works agreement template.</p></div>
+  </div>
+</section>
+
+<section class="grid cols-2">
+  <div class="card"><h2>12-month roadmap</h2><table class="kv">
+    <tr><th>Q1</th><td>Benchmark hardware, gateway MVP, letters of intent with Karlsruhe operators</td></tr>
+    <tr><th>Q2</th><td>Close seed and asset financing; first 2 paid pilots (stage 1)</td></tr>
+    <tr><th>Q3</th><td>Convert pilots to 24-month contracts (≥ 60%); hospital connectors (VDA 5050, HL7)</td></tr>
+    <tr><th>Q4</th><td>Full 10-robot fleet and a permanent regional service and swap hub</td></tr></table></div>
+  <div class="card"><h2>Targets we track</h2><table class="kv">
+    <tr><th>Blended gross margin</th><td>≥ 50%</td></tr>
+    <tr><th>Hardware cash payback</th><td>≤ 12 months</td></tr>
+    <tr><th>Annual contract churn</th><td>&lt; 10%</td></tr>
+    <tr><th>Fleet uptime</th><td>≥ 98%</td></tr>
+    <tr><th>MTBF / swap time</th><td>≥ 300 h / &lt; 24 h</td></tr>
+    <tr><th>Pilot-to-contract conversion</th><td>≥ 60%</td></tr>
+    <tr><th>Nursing time saved</th><td>30–45 min per shift</td></tr>
+    <tr><th>Nursing staff NPS</th><td>≥ 40</td></tr></table></div>
+</section>
+<p class="hint">Figures from the HealthGuardians for Elder Citizens business plan; forecasts, not results.</p>
 </main>
 <footer id="site-footer"></footer>
 </body>

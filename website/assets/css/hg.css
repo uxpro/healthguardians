@@ -334,6 +334,8 @@ body.dos .loading { color: var(--dos-dim); }
 .dbox.rows23 { grid-row: 2 / span 2; }
 .dos-robot { flex: 1; min-height: 120px; display: flex; align-items: center; justify-content: center; color: var(--dos-fg); }
 .dos-robot svg { height: 100%; max-height: 220px; width: auto; }
+.dos-robot .robot-photo { max-height: 240px; max-width: 100%; height: auto; object-fit: contain; border: 1px solid var(--dos-line); }
+.robot-figure .robot-photo { display: block; max-width: 100%; max-height: 260px; border-radius: 6px; }
 .dos-hint { color: var(--dos-dim); font-size: 12px; margin: 0; }
 .dos-label { color: var(--green); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; margin: 4px 0 0; }
 .dos-actions { display: flex; gap: 8px; flex-wrap: wrap; }

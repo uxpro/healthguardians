@@ -5,7 +5,7 @@ Static website of Health Guardians (HG Group) plus two dashboards for the browse
 - **Customer dashboard** (role `user`): one customer, its humanoids and their events.
   - **Central Clinic** (`cc@hg.com`): fall detection, 4 humanoids. A decoy: its events are simulated in the browser by a timer
     and are never stored.
-  - **North Clinic** (`nc@hg.com`): conversation support, 3 OEM B humanoids. The live demo: `Humanoid_OEM_B_UUID` is linked
+  - **North Clinic** (`nc@hg.com`): conversation support, 3 OEM B humanoids. The live demo: `Roha2212` (photo in `assets/img/Roha2212.jpeg`) is linked
     to `Demo_Patient_UUID` and to the `nc@hg.com` account. Events are real database rows, fetched by polling with the JWT.
 - **Health Guardian Logistics Dashboard** (role `admin`, `admin@hg.com`): the whole fleet, availability and logistics only.
   It never sees patient IDs, use cases or event payloads.
@@ -22,7 +22,7 @@ Demo injection buttons (North Clinic) ──────► public.hg_robot_even
 ```
 
 - The phone app keeps writing `public.hg_events` exactly as before. The events of the account linked to a humanoid
-  (`nc@hg.com` → `Humanoid_OEM_B_UUID`) are shown as that humanoid's events, with an event code:
+  (`nc@hg.com` → `Roha2212`) are shown as that humanoid's events, with an event code:
 
 | Check-in step and answer | Code | Type |
 |---|---|---|
@@ -68,7 +68,7 @@ Demo injection buttons (North Clinic) ──────► public.hg_robot_even
    It adds only `hg_*` tables and functions and does not change any existing table, role or policy.
    To check the setup and see the latest app events, run [`db/check.sql`](db/check.sql).
 3. **Phone app (optional).** Sign in to the HealthGuardians app with `nc@hg.com`: its check-ins now appear on both
-   dashboards as events of Humanoid OEM B UUID.
+   dashboards as events of Roha2212.
 
 ## Publish on GitHub Pages
 
