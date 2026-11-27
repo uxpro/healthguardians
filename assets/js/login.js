@@ -1,6 +1,7 @@
 // Sign-in page: password sign-in with Supabase Auth, then a check that the account has Health Guardian access.
 import { createApi, errorText } from './api.js';
 import { hasSession } from './session.js';
+import { JURY, juryOpen } from './jury.js';
 
 const api = createApi();
 const form = document.getElementById('login-form');
@@ -15,6 +16,29 @@ function show(text) {
 document.getElementById('show-pw').addEventListener('change', (e) => {
   document.getElementById('password').type = e.target.checked ? 'text' : 'password';
 });
+
+// RobotHack jury: the logo reveals the read-only jury sign-in until the access ends.
+const hint = document.getElementById('jury-hint');
+if (hint && juryOpen()) {
+  hint.hidden = false;
+  document.getElementById('jury-until').textContent = `the end of ${JURY.untilText}`;
+  const logo = document.getElementById('jury-logo');
+  const reveal = () => {
+    const box = document.getElementById('jury-secret');
+    if (!box.hidden) return;
+    document.getElementById('jury-cred').textContent = `${JURY.email} · ${JURY.password}`;
+    box.hidden = false;
+    logo.setAttribute('aria-expanded', 'true');
+  };
+  logo.addEventListener('mouseenter', reveal);
+  logo.addEventListener('focus', reveal);
+  logo.addEventListener('click', reveal);
+  document.getElementById('jury-use').addEventListener('click', () => {
+    form.email.value = JURY.email;
+    form.password.value = JURY.password;
+    document.getElementById('login-btn').focus();
+  });
+}
 
 // Already signed in: go straight to the dashboard.
 if (hasSession()) location.replace('dashboard.html');

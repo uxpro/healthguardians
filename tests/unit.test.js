@@ -11,6 +11,7 @@ import { lineChart, barChart, eventsPerHour } from '../assets/js/charts.js';
 import { sparePartsFor, warehouseRows, EVENT_CODES, CHECK_IN, codeInfo } from '../assets/js/data.js';
 import { robotSvg } from '../assets/js/robot-art.js';
 import { eventsCsv } from '../assets/js/dashboard.js';
+import { JURY, juryOpen } from '../assets/js/jury.js';
 
 // ---------------------------------------------------------------- format
 test('humanize makes identifiers readable', () => {
@@ -313,4 +314,12 @@ test('event export: customers get the payload, logistics does not', () => {
   assert.ok(user.includes('Humanoid OEM B UUID'));
   assert.ok(!admin.includes('Payload'));
   assert.ok(!admin.includes('not_good'));
+});
+
+test('jury sign-in is revealed until the end of 7 December 2026 (Riga time)', () => {
+  assert.equal(JURY.email, 'jury@hg.com');
+  assert.equal(juryOpen(new Date('2026-11-27T12:00:00+02:00')), true);
+  assert.equal(juryOpen(new Date('2026-12-07T23:59:59+02:00')), true);
+  assert.equal(juryOpen(new Date('2026-12-08T00:00:00+02:00')), false);
+  assert.equal(juryOpen(new Date('2027-01-01T00:00:00Z')), false);
 });

@@ -69,6 +69,8 @@ create table if not exists public.hg_members (
 );
 -- read_only: sees a dashboard but cannot write anything (the jury account).
 alter table public.hg_members add column if not exists read_only boolean not null default false;
+-- access_until: after this moment the membership gives no access at all (the jury account ends 7 Dec 2026).
+alter table public.hg_members add column if not exists access_until timestamptz;
 
 create table if not exists public.hg_oems (
   id      text primary key check (id ~ '^OEM_[A-Z]$'),
@@ -173,6 +175,7 @@ language sql stable security definer set search_path = ''
 as $$
   select m.* from public.hg_members m
   where m.user_id = auth.uid() and public.current_app_role() is not null
+    and (m.access_until is null or m.access_until > now())
 $$;
 
 -- True for read-only accounts (jury). Used by the hg_events insert policy, which cannot read hg_members itself.
@@ -462,9 +465,10 @@ begin
     on conflict (user_id) do update set hg_role = 'admin', customer_id = null;
   end if;
   if v_ju is not null then      -- jury: North Clinic dashboard, read-only
-    insert into public.hg_members (user_id, hg_role, customer_id, display_name, read_only)
-    values (v_ju, 'user', 'north-clinic', 'RobotHack jury', true)
-    on conflict (user_id) do update set hg_role = 'user', customer_id = 'north-clinic', read_only = true;
+    insert into public.hg_members (user_id, hg_role, customer_id, display_name, read_only, access_until)
+    values (v_ju, 'user', 'north-clinic', 'RobotHack jury', true, '2026-12-08 00:00:00+02')   -- end of 7 Dec 2026, Riga
+    on conflict (user_id) do update set hg_role = 'user', customer_id = 'north-clinic', read_only = true,
+      access_until = '2026-12-08 00:00:00+02';
   end if;
   update public.hg_humanoids set linked_user_id = v_nc where id = 'b2d4f6a8-0c1e-4f3a-9b5d-7e9f1a3c5e55';   -- Roha2212
   return jsonb_build_object('cc@hg.com', v_cc is not null, 'nc@hg.com', v_nc is not null,
