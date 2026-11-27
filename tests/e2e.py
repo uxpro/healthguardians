@@ -39,7 +39,7 @@ def psql(sql, uid=None, args=None, role='authenticated'):
 
 
 def setup():
-    accounts = ['cc@hg.com', 'nc@hg.com', 'admin@hg.com', 'stranger@example.org']
+    accounts = ['cc@hg.com', 'nc@hg.com', 'admin@hg.com', 'jury@hg.com', 'stranger@example.org']
     for email in accounts:
         uid = psql(f"insert into auth.users (email, raw_user_meta_data) values ('{email}', '{{}}') "
                    f"on conflict (email) do update set email = excluded.email returning id;")
@@ -116,7 +116,7 @@ async def handle(route):
         return await reply(404, {'message': 'not found'})
     except RuntimeError as err:
         msg = str(err)
-        status = 403 if ('permission denied' in msg or 'hg_access_denied' in msg or 'row-level security' in msg) else 400
+        status = 403 if ('permission denied' in msg or 'hg_access_denied' in msg or 'hg_read_only' in msg or 'row-level security' in msg) else 400   # errcode 42501 -> 403, as PostgREST does
         return await reply(status, {'message': msg})
 
 
@@ -262,7 +262,7 @@ async def north_and_admin(browser):
     groups = await ad.eval_on_selector_all('.matrix .group h3', 'els => els.map(e => e.textContent.replace(/\\s+/g, " ").trim())')
     check(groups == ['Central Clinic 4', 'North Clinic 3', 'HG warehouse and service 5'], f'admin: fleet by customer {groups}')
     check('d1e3f5a7' not in await ad.content(), 'admin never sees patient UUIDs')
-    await ad.screenshot(path=f'{SHOTS}/admin_fleet.png', full_page=True)
+    await ad.screenshot(path=f'{SHOTS}/admin_fleet.png')
 
     # check-in on the robotic face (real hg_events rows) -> North Clinic log and logistics log
     before = int(psql("select count(*) from public.hg_events;"))
@@ -298,54 +298,68 @@ async def north_and_admin(browser):
     check(True, f'admin sees the injected fall after {time.time() - t0:.1f} s')
     check(await ad.locator('.toast .card').count() >= 1, 'admin: alert toast')
     # select the live humanoid on the logistics side
+    tabs = await ad.eval_on_selector_all('.dos-tabs [role=tab]', 'els => els.map(e => e.textContent)')
+    check(tabs == ['F1Fleet', 'F2Humanoid', 'F3Reliability & parts', 'F4Warehouse', 'F5Audit log'], f'admin: console tabs {tabs}')
     await ad.click('[data-unit="b2d4f6a8-0c1e-4f3a-9b5d-7e9f1a3c5e55"]')
+    await expect(ad.locator('.robot-box img.robot-photo')).to_have_count(1)
+    check(True, 'admin: selecting Roha2212 shows its photo top right')
+    await ad.click('.dos-tabs [data-view="humanoid"]')
     await ad.wait_for_selector('#robot-log')
     log = await ad.text_content('#robot-log')
     check('Fall detected' in log and 'Bathroom' not in log and 'Not good' not in log, 'admin: gateway log without payloads')
-    check('Operating time' in await ad.text_content('.dash-main aside'), 'admin: per-instance panel')
+    check('Operating time' in await ad.text_content('.dash-main'), 'admin: per-instance panel')
     check(int(await ad.text_content('#incidents')) >= 3, f"admin: incidents counted ({await ad.text_content('#incidents')})")
-    await ad.screenshot(path=f'{SHOTS}/admin_instance.png', full_page=True)
+    for view in ['fleet', 'humanoid', 'reliability', 'warehouse', 'audit']:
+        await ad.click(f'.dos-tabs [data-view="{view}"]')
+        r = await ad.evaluate('''() => { const m = document.querySelector('.dash-main');
+          return [document.scrollingElement.scrollHeight, innerHeight, m.scrollHeight, m.clientHeight]; }''')
+        check(r[0] <= r[1] and r[2] <= r[3] + 1, f'admin {view}: fits the screen without scrolling {r}')
+    await ad.click('.dos-tabs [data-view="humanoid"]')
+    await ad.screenshot(path=f'{SHOTS}/admin_instance.png')
     # OEM tab
+    await ad.click('.dos-tabs [data-view="fleet"]')
     await ad.click('[data-tab="oem"]')
     groups = await ad.eval_on_selector_all('.matrix .group h3', 'els => els.map(e => e.textContent.replace(/\\s+/g, " ").trim())')
     check(groups == ['OEM A 4', 'OEM B 4', 'OEM C 2', 'OEM D 2'], f'admin: fleet by OEM {groups}')
     check('OEM A variant A, OEM A variant B' in await ad.text_content('.matrix'), 'admin: variants listed')
     # sub views
-    await ad.click('[data-goto="parts"]')
+    await ad.screenshot(path=f'{SHOTS}/admin_fleet_oem.png')
+    await ad.keyboard.press('F3')
+    await ad.wait_for_selector('table.brut tbody tr')
     check(await ad.locator('table.brut tbody tr').count() == 8, 'admin: components list of the OEM')
     check('Spare Humanoid OEM B Component H' in await ad.text_content('.dash-main'), 'admin: friendly part names')
-    await ad.click('[data-goto="fleet"]')
-    await ad.click('[data-goto="reliability"]')
-    check(await ad.locator('.chart svg').count() == 1, 'admin: reliability plot')
-    await ad.screenshot(path=f'{SHOTS}/admin_reliability.png', full_page=True)
+    check(await ad.locator('.chart svg').count() == 0, 'admin: reliability plot hidden at first')
+    await ad.click('[data-plot="rel"]')
+    check(await ad.locator('.chart svg').count() == 1, 'admin: reliability plot after Show plot')
+    await ad.screenshot(path=f'{SHOTS}/admin_reliability.png')
     # mock maintenance with the 4 s technician timer
-    await ad.click('[data-view="maintenance"]')
+    await ad.click('.dos-menu [data-view="maintenance"]')
     await ad.click('#mock-form button[type=submit]')
     await expect(ad.locator('#tech-status')).to_have_text('Waiting for the technician')
     await expect(ad.locator('#tech-status')).to_have_text('Technician has accepted the request', timeout=6000)
     check(True, 'maintenance request accepted after the timer')
     # warehouse
-    await ad.click('[data-view="warehouse"]')
+    await ad.click('.dos-tabs [data-view="warehouse"]')
     await ad.select_option('#w-filter', 'OEM_C')
     check((await ad.text_content('#w-count')) == '8 rows', 'warehouse filter')
     check('Humanoid OEM N UUID' in await ad.text_content('#w-table'), 'warehouse lists Humanoid OEM N UUID')
     await ad.select_option('#w-filter', '')
-    await ad.screenshot(path=f'{SHOTS}/admin_warehouse.png', full_page=True)
+    await ad.screenshot(path=f'{SHOTS}/admin_warehouse.png')
     # export without payloads
-    await ad.click('[data-view="export"]')
+    await ad.click('.dos-menu [data-view="export"]')
     async with ad.expect_download() as dl:
         await ad.click('#export-form button[type=submit]')
     path = await (await dl.value).path()
     csv = open(path, encoding='utf-8-sig').read()
     check(csv.startswith('Date,Time,Humanoid') and 'Payload' not in csv and 'Fall detected' in csv, 'admin export has no payloads')
     # audit log
-    await ad.click('[data-view="audit"]')
+    await ad.click('.dos-tabs [data-view="audit"]')
     await ad.wait_for_selector('#audit-body tr td')
     audit = await ad.text_content('#audit-body')
     for action in ['Inject event', 'Start check in', 'Sign in', 'Mock maintenance', 'Export events', 'Open view', 'Select humanoid']:
         check(action in audit, f'audit log has "{action}"')
     check('nc@hg.com' in audit and 'admin@hg.com' in audit, 'audit log names the accounts')
-    await ad.screenshot(path=f'{SHOTS}/admin_audit.png', full_page=True)
+    await ad.screenshot(path=f'{SHOTS}/admin_audit.png')
 
     # nc cannot reach admin functions
     status = await nc.evaluate("""async () => {
@@ -381,6 +395,48 @@ async def north_and_admin(browser):
     check(not nc.errors, f'nc: no console errors {nc.errors[:3]}')
     check(not ad.errors, f'admin: no console errors {ad.errors[:3]}')
     await nctx.close(); await actx.close()
+
+
+async def jury(browser):
+    print('Jury (read-only North Clinic view)')
+    ctx, ju = await new_page(browser, 'jury')
+    await sign_in(ju, 'jury@hg.com')
+    await expect(ju.locator('.dash-top .title')).to_contain_text('North Clinic dashboard')
+    check(await ju.locator('#jury-note').is_visible() and 'RESTRICTED VIEW FOR THE JURY' in await ju.text_content('#jury-note'), 'jury: restricted-view banner')
+    check('RESTRICTED VIEW' in await ju.text_content('.dos-bar') and 'RobotHack jury · Read-only' in await ju.text_content('#who'), 'jury: marked in the menu bar')
+    tabs = await ju.eval_on_selector_all('.dos-tabs [role=tab]', 'els => els.map(e => e.textContent)')
+    check(tabs == ['F1Overview', 'F2Virtual face', 'F3Activity & log'], f'jury: no demo tab {tabs}')
+    menu = await ju.eval_on_selector_all('.dos-menu [data-view]', 'els => els.map(e => e.dataset.view)')
+    check(menu == ['export'], f'jury: menu has only export {menu}')
+    check(await ju.locator('[data-view="extension"], [data-view="ticket"], [data-inject]').count() == 0, 'jury: no request or inject buttons')
+    sel = await ju.eval_on_selector('#humanoid-select', 'e => e.selectedOptions[0].textContent')
+    check(sel.startswith('Roha2212'), f'jury: sees Roha2212 ({sel})')
+    check(await ju.locator('#robot-log tbody tr').count() >= 3, 'jury: sees the live log')
+    await ju.keyboard.press('F2')
+    check(await ju.locator('#start-checkin').count() == 0 and await ju.locator('.dos-ro').count() >= 1, 'jury: check-in disabled')
+    await ju.keyboard.press('F4')
+    check(await ju.get_attribute('.dos-tabs [data-view="face"]', 'aria-selected') == 'true', 'jury: F4 does nothing')
+    await ju.keyboard.press('F3')
+    await ju.click('[data-plot="hour"]')
+    await ju.wait_for_selector('#events-chart-wrap svg')
+    r = await ju.evaluate('''() => { const m = document.querySelector('.dash-main');
+      return [document.scrollingElement.scrollHeight, innerHeight, m.scrollHeight, m.clientHeight]; }''')
+    check(r[0] <= r[1] and r[2] <= r[3] + 1, f'jury: fits the screen without scrolling {r}')
+    await ju.keyboard.press('F1')
+    await ju.screenshot(path=f'{SHOTS}/jury_overview.png')
+    # even direct API calls cannot write
+    out = await ju.evaluate("""async () => {
+      const s = JSON.parse(localStorage.getItem('hg.session'));
+      const h = {apikey:'sb_publishable_5N7QYMzEKYInc0TZIWrtEQ_Y1SN4fiJ', Authorization:'Bearer '+s.access_token,'Content-Type':'application/json'};
+      const a = await fetch('https://czrynqwimujjpijosqfg.supabase.co/rest/v1/rpc/hg_inject_event', {method:'POST', headers:h,
+        body: JSON.stringify({p_humanoid:'b2d4f6a8-0c1e-4f3a-9b5d-7e9f1a3c5e55', p_code:128})});
+      return a.status; }""")
+    check(out == 403, f'jury: injecting via the API is refused ({out})')
+    ju.errors = [x for x in ju.errors if '403' not in x]
+    check(psql("select count(*) from public.hg_audit_log where email = 'jury@hg.com';") == '0', 'jury: nothing written to the audit log')
+    check(psql("select count(*) from public.hg_robot_events e join public.hg_members m on m.user_id = e.created_by join auth.users u on u.id = m.user_id where u.email = 'jury@hg.com';") == '0', 'jury: no events written')
+    check(not ju.errors, f'jury: no console errors {ju.errors[:3]}')
+    await ctx.close()
 
 
 async def central(browser):
@@ -427,6 +483,7 @@ async def main():
         await public_pages(browser)
         await login_errors(browser)
         await north_and_admin(browser)
+        await jury(browser)
         await central(browser)
         await browser.close()
     print(f'\n{len(FAILS)} failure(s)')

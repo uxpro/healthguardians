@@ -1,6 +1,6 @@
 -- HealthGuardians: complete setup for the production project, in one paste.
 -- Creates the app's event log (hg_events) and then the dashboards. Safe to run again.
--- Create cc@hg.com, nc@hg.com and admin@hg.com first (Authentication -> Users), or run
+-- Create cc@hg.com, nc@hg.com, admin@hg.com and jury@hg.com (read-only) first (Authentication -> Users), or run
 -- select public.hg_link_demo_accounts(); afterwards.
 
 -- ===== Part 1: event log the app writes =====
@@ -67,6 +67,8 @@ create table if not exists public.hg_members (
   created_at   timestamptz not null default now(),
   constraint hg_members_customer check ((hg_role = 'user') = (customer_id is not null))
 );
+-- read_only: sees a dashboard but cannot write anything (the jury account).
+alter table public.hg_members add column if not exists read_only boolean not null default false;
 
 create table if not exists public.hg_oems (
   id      text primary key check (id ~ '^OEM_[A-Z]$'),
@@ -173,6 +175,20 @@ as $$
   where m.user_id = auth.uid() and public.current_app_role() is not null
 $$;
 
+-- True for read-only accounts (jury). Used by the hg_events insert policy, which cannot read hg_members itself.
+create or replace function public.hg_read_only()
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select coalesce((select m.read_only from public.hg_members m where m.user_id = auth.uid()), false)
+$$;
+grant execute on function public.hg_read_only() to authenticated;
+
+-- Read-only accounts cannot add check-in events either (replaces the policy of part 1).
+drop policy if exists hg_events_insert_own on public.hg_events;
+create policy hg_events_insert_own on public.hg_events for insert to authenticated
+  with check (user_id = auth.uid() and public.current_app_role() is not null and not public.hg_read_only());
+
 -- Event code of one step of the phone app's check-in (public.hg_events).
 create or replace function public.hg_app_event_code(p_event_type text, p_answer text)
 returns smallint
@@ -216,7 +232,7 @@ returns jsonb
 language sql stable security definer set search_path = ''
 as $$
   select jsonb_build_object(
-    'email', u.email, 'role', m.hg_role, 'display_name', m.display_name, 'phone', m.phone,
+    'email', u.email, 'role', m.hg_role, 'read_only', m.read_only, 'display_name', m.display_name, 'phone', m.phone,
     'member_since', m.created_at,
     'customer', case when c.id is null then null else
       jsonb_build_object('id', c.id, 'name', c.name, 'unique_id', c.unique_id, 'use_case', c.use_case,
@@ -332,6 +348,9 @@ begin
   if me.user_id is null then
     raise exception 'hg_access_denied' using errcode = '42501';
   end if;
+  if me.read_only then
+    return;                                   -- read-only accounts write nothing, not even audit lines
+  end if;
   if (select count(*) from public.hg_audit_log
       where user_id = me.user_id and created_at > now() - interval '1 minute') >= 60 then
     raise exception 'hg_rate_limited' using errcode = '54000';
@@ -352,6 +371,9 @@ declare
 begin
   if me.user_id is null then
     raise exception 'hg_access_denied' using errcode = '42501';
+  end if;
+  if me.read_only then
+    raise exception 'hg_read_only' using errcode = '42501';
   end if;
   if not exists (select 1 from public.hg_humanoids h
                  where h.id = p_humanoid and h.instance_status = 'deployed'
@@ -386,6 +408,9 @@ begin
   if me.user_id is null then
     raise exception 'hg_access_denied' using errcode = '42501';
   end if;
+  if me.read_only then
+    raise exception 'hg_read_only' using errcode = '42501';
+  end if;
   update public.hg_members
   set display_name = nullif(btrim(p_display_name), ''), phone = nullif(btrim(p_phone), '')
   where user_id = me.user_id;
@@ -419,6 +444,7 @@ declare
   v_cc uuid := (select id from auth.users where lower(email) = 'cc@hg.com');
   v_nc uuid := (select id from auth.users where lower(email) = 'nc@hg.com');
   v_ad uuid := (select id from auth.users where lower(email) = 'admin@hg.com');
+  v_ju uuid := (select id from auth.users where lower(email) = 'jury@hg.com');
 begin
   if v_cc is not null then
     insert into public.hg_members (user_id, hg_role, customer_id, display_name)
@@ -435,9 +461,14 @@ begin
     values (v_ad, 'admin', null, 'HG logistics')
     on conflict (user_id) do update set hg_role = 'admin', customer_id = null;
   end if;
+  if v_ju is not null then      -- jury: North Clinic dashboard, read-only
+    insert into public.hg_members (user_id, hg_role, customer_id, display_name, read_only)
+    values (v_ju, 'user', 'north-clinic', 'RobotHack jury', true)
+    on conflict (user_id) do update set hg_role = 'user', customer_id = 'north-clinic', read_only = true;
+  end if;
   update public.hg_humanoids set linked_user_id = v_nc where id = 'b2d4f6a8-0c1e-4f3a-9b5d-7e9f1a3c5e55';   -- Roha2212
   return jsonb_build_object('cc@hg.com', v_cc is not null, 'nc@hg.com', v_nc is not null,
-                            'admin@hg.com', v_ad is not null);
+                            'admin@hg.com', v_ad is not null, 'jury@hg.com', v_ju is not null);
 end $$;
 
 -- Functions: only the API is callable, and only with a signed-in account.
