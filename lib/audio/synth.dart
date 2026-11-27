@@ -11,6 +11,13 @@ class SynthSound {
     return SynthSound._(name, sampleRate, encodeWav(samples, sampleRate), computeEnvelope(samples, sampleRate));
   }
 
+  /// Decodes a recorded clip (16-bit PCM WAV, mono or stereo) so it plays and animates like the
+  /// synthesised sounds. Throws [FormatException] for anything else.
+  factory SynthSound.fromWav(String name, Uint8List wav) {
+    final (samples, rate) = decodeWav(wav);
+    return SynthSound.fromSamples(name, samples, rate);
+  }
+
   final String name;
   final int sampleRate;
 
@@ -63,6 +70,48 @@ Uint8List encodeWav(Float32List samples, int sampleRate) {
     b.setInt16(44 + i * 2, (v * 32767).round(), Endian.little);
   }
   return b.buffer.asUint8List();
+}
+
+/// Samples (-1..1, stereo mixed down to mono) and sample rate of a 16-bit PCM WAV file. Skips
+/// extra chunks (LIST and the like) before the data.
+(Float32List, int) decodeWav(Uint8List wav) {
+  final b = ByteData.sublistView(wav);
+  String tag(int at) => String.fromCharCodes(wav.sublist(at, at + 4));
+  if (wav.length < 44 || tag(0) != 'RIFF' || tag(8) != 'WAVE') {
+    throw const FormatException('not a WAV file');
+  }
+  var channels = 0, rate = 0, bits = 0;
+  var pos = 12;
+  while (pos + 8 <= wav.length) {
+    final id = tag(pos);
+    final len = b.getUint32(pos + 4, Endian.little);
+    final body = pos + 8;
+    if (id == 'fmt ') {
+      if (body + 16 > wav.length || b.getUint16(body, Endian.little) != 1) {
+        throw const FormatException('only PCM WAV files are supported');
+      }
+      channels = b.getUint16(body + 2, Endian.little);
+      rate = b.getUint32(body + 4, Endian.little);
+      bits = b.getUint16(body + 14, Endian.little);
+    } else if (id == 'data') {
+      if (rate <= 0 || bits != 16 || (channels != 1 && channels != 2)) {
+        throw const FormatException('only 16-bit mono or stereo PCM');
+      }
+      final bytes = math.min(len, wav.length - body);
+      final frames = bytes ~/ (2 * channels);
+      final out = Float32List(frames);
+      for (var f = 0; f < frames; f++) {
+        var v = 0.0;
+        for (var c = 0; c < channels; c++) {
+          v += b.getInt16(body + (f * channels + c) * 2, Endian.little) / 32768;
+        }
+        out[f] = v / channels;
+      }
+      return (out, rate);
+    }
+    pos = body + len + (len & 1);
+  }
+  throw const FormatException('WAV file has no data chunk');
 }
 
 /// RMS per 20 ms window, normalised so the loudest window is 1.
@@ -277,6 +326,50 @@ class Synth {
     }
     _normalise(out, 0.6);
     return SynthSound.fromSamples('action', out, sampleRate);
+  }
+
+  /// Musical interlude (10 s): a light, cheerful melody over a soft chord pad, played while the
+  /// patient takes the pill.
+  SynthSound interlude() {
+    const seconds = 10.0;
+    const beat = 0.5; // seconds per note
+    final out = Float32List((seconds * sampleRate).round());
+    // C major pentatonic tune (Hz), one note per beat; 0 = rest
+    const tune = [
+      523.25, 659.25, 783.99, 659.25, 587.33, 659.25, 523.25, 0.0, //
+      587.33, 659.25, 783.99, 880.0, 783.99, 659.25, 587.33, 0.0, //
+      523.25, 587.33, 659.25, 783.99, //
+    ];
+    const chords = [
+      [261.63, 329.63, 392.0], // C
+      [293.66, 349.23, 440.0], // Dm
+      [261.63, 329.63, 392.0], // C
+      [246.94, 293.66, 392.0], // G
+      [261.63, 329.63, 392.0], // C
+    ];
+    for (var i = 0; i < out.length; i++) {
+      final t = i / sampleRate;
+      final fade = math.min(1.0, t / 0.3) * math.min(1.0, (seconds - t) / 1.0);
+      // pad: one chord per 2 s, gently swelling
+      final chord = chords[math.min(chords.length - 1, t ~/ 2)];
+      final swell = 0.6 + 0.4 * math.sin(math.pi * ((t % 2) / 2));
+      var pad = 0.0;
+      for (final f in chord) {
+        pad += math.sin(2 * math.pi * f / 2 * t);
+      }
+      // melody: bell-like notes that decay
+      final n = t ~/ beat;
+      var bell = 0.0;
+      if (n < tune.length && tune[n] > 0) {
+        final f = tune[n];
+        final local = t - n * beat;
+        final env = math.min(1.0, local / 0.01) * math.exp(-local * 5);
+        bell = env * (math.sin(2 * math.pi * f * local) + 0.3 * math.sin(4 * math.pi * f * local));
+      }
+      out[i] = (0.18 * pad * swell + 0.9 * bell) * fade;
+    }
+    _normalise(out, 0.6);
+    return SynthSound.fromSamples('interlude', out, sampleRate);
   }
 
   /// Idle: a quiet low hum pulsing slowly, like a resting energy beam (4 s).

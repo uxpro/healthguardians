@@ -1,23 +1,36 @@
+import 'dart:typed_data';
+
 import 'synth.dart';
 
-/// All sounds of a check-in, synthesised once (in a background isolate, see main.dart) so the
-/// animation never waits for synthesis.
+/// All sounds of the conversation, prepared once (in a background isolate, see main.dart) so the
+/// animation never waits: the recorded voice clips plus the synthesised mode sounds.
 class SoundBank {
-  SoundBank(this._phrases, this.listening, this.action, this.idle);
+  SoundBank(this._voices, this.listening, this.interlude, this.action, this.idle);
 
-  final Map<String, SynthSound> _phrases;
+  final Map<String, SynthSound> _voices;
   final SynthSound listening;
+  final SynthSound interlude;
   final SynthSound action;
   final SynthSound idle;
 
-  /// The spoken phrase for [text] (synthesised now if it was not prepared).
-  SynthSound phrase(String text) => _phrases.putIfAbsent(text, () => Synth().speech(text));
+  /// The recorded clip [voice] (e.g. "speaking_1").
+  SynthSound voice(String voice) =>
+      _voices[voice] ?? (throw StateError('voice clip "$voice" is not loaded (assets/voice/$voice.wav)'));
 
-  Iterable<SynthSound> get all => [..._phrases.values, listening, action, idle];
+  bool hasVoice(String voice) => _voices.containsKey(voice);
 
-  /// Synthesises the phrases [texts] and the mode sounds. Top-level friendly for `compute`.
-  static SoundBank build(List<String> texts) {
+  Iterable<SynthSound> get all => [..._voices.values, listening, interlude, action, idle];
+
+  /// Decodes the voice clips [wavs] (name -> WAV bytes) and synthesises the mode sounds.
+  /// Top-level friendly for `compute`.
+  static SoundBank build(Map<String, Uint8List> wavs) {
     final synth = Synth();
-    return SoundBank({for (final t in texts) t: synth.speech(t)}, synth.listening(), synth.action(), synth.idle());
+    return SoundBank(
+      {for (final e in wavs.entries) e.key: SynthSound.fromWav(e.key, e.value)},
+      synth.listening(),
+      synth.interlude(),
+      synth.action(),
+      synth.idle(),
+    );
   }
 }

@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import '../audio/audio_out.dart';
 import '../audio/sound_bank.dart';
 import '../conversation/conversation.dart';
-import '../face/face_mode.dart';
 import '../face/face_view.dart';
 import '../services/event_log.dart';
 
-/// Full-screen face on black. Tap the face to start a check-in.
+/// Full-screen face on black. Nothing is written on screen while the face talks: no captions, no
+/// answer buttons. With [autoStart] the conversation starts once, as soon as the screen opens
+/// (the demo after "Continue without signing in"); otherwise a tap on the face starts it.
 class FaceScreen extends StatefulWidget {
   const FaceScreen({
     super.key,
@@ -16,6 +17,7 @@ class FaceScreen extends StatefulWidget {
     required this.events,
     this.accountLabel,
     this.onSignOut,
+    this.autoStart = false,
   });
 
   final SoundBank sounds;
@@ -25,6 +27,9 @@ class FaceScreen extends StatefulWidget {
   /// E-mail of the signed-in account, or null without an account.
   final String? accountLabel;
   final VoidCallback? onSignOut;
+
+  /// Start the conversation once when the screen opens; a tap on the face does not restart it.
+  final bool autoStart;
 
   @override
   State<FaceScreen> createState() => _FaceScreenState();
@@ -38,6 +43,11 @@ class _FaceScreenState extends State<FaceScreen> {
     super.initState();
     _talk = Conversation(sounds: widget.sounds, audio: widget.audio, events: widget.events);
     _talk.enterIdle();
+    if (widget.autoStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _talk.start();
+      });
+    }
   }
 
   @override
@@ -55,9 +65,11 @@ class _FaceScreenState extends State<FaceScreen> {
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () {
-                if (!_talk.running) _talk.start();
-              },
+              onTap: widget.autoStart
+                  ? null
+                  : () {
+                      if (!_talk.running) _talk.start();
+                    },
               child: FaceView(mode: () => _talk.mode, envelope: _talk.envelopeNow),
             ),
           ),
@@ -90,90 +102,36 @@ class _Overlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = FacePalette.of(talk.mode);
-    final asking = talk.asking;
-    final acting = talk.acting;
-    final caption = talk.caption ?? (talk.running ? null : 'Tap the face to start the check-in');
     return Stack(
       children: [
-        // status and controls, kept faint so the face stays in front
-        Positioned(
-          top: 8,
-          left: 12,
-          child: ValueListenableBuilder<EventLogStatus>(
-            valueListenable: events.status,
-            builder: (context, status, _) => _StatusChip(status: status, account: accountLabel),
+        // signed in: a faint line says whether the events reach the database (nothing for the demo)
+        if (accountLabel != null)
+          Positioned(
+            top: 8,
+            left: 12,
+            child: ValueListenableBuilder<EventLogStatus>(
+              valueListenable: events.status,
+              builder: (context, status, _) => _StatusChip(status: status, account: accountLabel),
+            ),
           ),
-        ),
+        // faint icons only, so the face stays alone on screen
         Positioned(
           top: 0,
           right: 4,
           child: Row(children: [
             if (talk.running)
               IconButton(
-                tooltip: 'Stop the check-in',
-                icon: const Icon(Icons.stop_circle_outlined, color: Colors.white38),
+                tooltip: 'Stop',
+                icon: const Icon(Icons.stop_circle_outlined, color: Colors.white24),
                 onPressed: talk.cancel,
               ),
             if (onSignOut != null)
               IconButton(
                 tooltip: accountLabel == null ? 'Sign in' : 'Sign out',
-                icon: Icon(accountLabel == null ? Icons.login : Icons.logout, color: Colors.white38),
+                icon: Icon(accountLabel == null ? Icons.login : Icons.logout, color: Colors.white24),
                 onPressed: onSignOut,
               ),
           ]),
-        ),
-        Positioned(
-          left: 24,
-          right: 24,
-          bottom: 16,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (caption != null)
-                Text(
-                  caption,
-                  key: const Key('caption'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white.withAlpha(170), fontSize: 20, letterSpacing: 0.3),
-                ),
-              if (acting != null) ...[
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: 280,
-                  child: LinearProgressIndicator(
-                    value: 1 - talk.actionRemaining.inMilliseconds / acting.duration.inMilliseconds,
-                    color: palette.core,
-                    backgroundColor: Colors.white12,
-                    minHeight: 3,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text('${talk.actionRemaining.inSeconds} s',
-                    key: const Key('countdown'), style: const TextStyle(color: Colors.white54, fontSize: 14)),
-              ],
-              if (asking != null) ...[
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  children: [
-                    for (final option in asking.options)
-                      OutlinedButton(
-                        key: Key('answer-${option.value}'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: BorderSide(color: palette.aura.withAlpha(180)),
-                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                          textStyle: const TextStyle(fontSize: 18),
-                        ),
-                        onPressed: () => talk.answer(option),
-                        child: Text(option.label),
-                      ),
-                  ],
-                ),
-              ],
-            ],
-          ),
         ),
       ],
     );
@@ -191,7 +149,7 @@ class _StatusChip extends StatelessWidget {
     final (color, text) = switch (status) {
       EventLogStatus.ready => (const Color(0xFF4CAF50), 'Events saved to ${account ?? 'your account'}'),
       EventLogStatus.failed => (const Color(0xFFE57373), 'Events not saved yet (retrying)'),
-      EventLogStatus.offline => (Colors.white38, 'Not signed in: events are not saved'),
+      EventLogStatus.offline => (Colors.white38, 'Events are not saved'),
     };
     return Row(
       mainAxisSize: MainAxisSize.min,

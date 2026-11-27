@@ -14,15 +14,15 @@ class _Cancelled implements Exception {
   const _Cancelled();
 }
 
-/// Runs the check-in script: switches the face mode, plays the sounds, waits for answers and
-/// logs one event per step.
+/// Runs the demo script: switches the face mode in step with the recorded voice clips, plays the
+/// sounds and logs the session. Shows nothing on screen and waits for no input: every step has a
+/// fixed length (a voice step lasts as long as its clip).
 class Conversation extends ChangeNotifier {
   Conversation({
     required this.sounds,
     required this.audio,
     required this.events,
-    this.script = checkInScript,
-    this.listenTimeout = const Duration(seconds: 20),
+    this.script = demoScript,
     this.afterSpeech = const Duration(milliseconds: 400),
   });
 
@@ -31,20 +31,14 @@ class Conversation extends ChangeNotifier {
   final EventSink events;
   final List<ScriptStep> script;
 
-  /// No answer within this time is logged as "no_answer".
-  final Duration listenTimeout;
-
-  /// Pause after a phrase before the next step.
+  /// Pause after a voice clip before the next step.
   final Duration afterSpeech;
 
   FaceMode _mode = FaceMode.idle;
-  String? _caption;
-  AskStep? _asking;
-  ActionStep? _acting;
-  Duration _actionRemaining = Duration.zero;
   String? _sessionId;
   bool _running = false;
   bool _disposed = false;
+  int _runs = 0;
 
   SynthSound? _sound;
   final Stopwatch _soundClock = Stopwatch();
@@ -52,21 +46,16 @@ class Conversation extends ChangeNotifier {
   int _generation = 0;
   Timer? _timer;
   Completer<void>? _wake;
-  Completer<AnswerOption?>? _answer;
 
   FaceMode get mode => _mode;
-
-  /// Text shown under the face: the phrase being spoken, the question, or the exercise.
-  String? get caption => _caption;
-
-  /// The question waiting for an answer (listening mode), else null.
-  AskStep? get asking => _asking;
-
-  /// The exercise running (action mode), else null.
-  ActionStep? get acting => _acting;
-  Duration get actionRemaining => _actionRemaining;
   String? get sessionId => _sessionId;
   bool get running => _running;
+
+  /// How many times the script was started.
+  int get runs => _runs;
+
+  /// Name of the sound playing now (voice clip or mode sound), else null.
+  String? get soundName => _sound?.name;
 
   /// Loudness of the sound playing now (0..1): drives the animation.
   double envelopeNow() {
@@ -75,16 +64,32 @@ class Conversation extends ChangeNotifier {
     return s.envelopeAt(_soundClock.elapsedMicroseconds / 1e6);
   }
 
+  /// Total length of the script without the pauses after speech.
+  Duration get scriptLength {
+    var total = Duration.zero;
+    for (final step in script) {
+      total += switch (step) {
+        IdleStep(:final duration) => duration,
+        VoiceStep(:final voice) => sounds.voice(voice).duration + afterSpeech,
+        ListenStep(:final duration) => duration,
+        ActionStep(:final duration) => duration,
+        FinishStep() => Duration.zero,
+      };
+    }
+    return total;
+  }
+
   /// Idle face with its resting hum (when the screen opens).
   void enterIdle() {
     _setMode(FaceMode.idle);
     _play(sounds.idle);
   }
 
-  /// Starts a check-in. Does nothing if one is running.
+  /// Starts the script. Does nothing if it is running.
   Future<void> start() async {
     if (_running || _disposed) return;
     _running = true;
+    _runs++;
     final gen = ++_generation;
     _sessionId = newUuidV4();
     _log('session_started', FaceMode.idle);
@@ -104,28 +109,14 @@ class Conversation extends ChangeNotifier {
     }
   }
 
-  /// Answer from the buttons shown in listening mode.
-  void answer(AnswerOption option) {
-    final pending = _answer;
-    final asking = _asking;
-    if (pending == null || pending.isCompleted || asking == null) return;
-    if (!asking.options.contains(option)) return;
-    pending.complete(option);
-  }
-
-  /// Stops the check-in and returns to idling.
+  /// Stops the script and returns to idling.
   void cancel() {
     _generation++;
     _timer?.cancel();
     _timer = null;
     final wake = _wake;
     if (wake != null && !wake.isCompleted) wake.complete();
-    final pending = _answer;
-    if (pending != null && !pending.isCompleted) pending.complete(null);
     _running = false;
-    _asking = null;
-    _acting = null;
-    _caption = null;
     _sound = null;
     _setMode(FaceMode.idle);
     unawaited(audio.stop());
@@ -142,45 +133,22 @@ class Conversation extends ChangeNotifier {
 
   Future<void> _run(ScriptStep step, int gen) async {
     switch (step) {
-      case final SayStep say:
-        _asking = null;
-        _acting = null;
-        _caption = say.text;
+      case IdleStep(:final duration):
+        _setMode(FaceMode.idle);
+        await _playFor(sounds.idle, duration, gen);
+      case VoiceStep(:final voice):
         _setMode(FaceMode.speaking);
-        final sound = sounds.phrase(say.text);
-        _play(sound);
-        await _sleep(sound.duration + afterSpeech, gen);
-      case final AskStep ask:
-        _asking = ask;
-        _caption = ask.question;
+        final clip = sounds.voice(voice);
+        _play(clip);
+        await _sleep(clip.duration + afterSpeech, gen);
+      case ListenStep(:final duration, :final music):
         _setMode(FaceMode.listening);
-        _play(sounds.listening);
-        final asked = DateTime.now();
-        final chosen = await _waitForAnswer(gen);
-        _asking = null;
-        _log(ask.eventType, FaceMode.listening, question: ask.question, answer: chosen?.value ?? 'no_answer', details: {
-          if (chosen != null) 'label': chosen.label,
-          'response_ms': DateTime.now().difference(asked).inMilliseconds,
-        });
-        _notify();
-      case final ActionStep act:
-        _acting = act;
-        _caption = act.caption;
+        await _playFor(music ? sounds.interlude : sounds.listening, duration, gen);
+      case ActionStep(:final eventType, :final duration):
         _setMode(FaceMode.action);
-        final seconds = act.duration.inSeconds;
-        final loop = sounds.action.duration.inSeconds;
-        for (var i = 0; i < seconds; i++) {
-          if (loop > 0 && i % loop == 0) _play(sounds.action);
-          _actionRemaining = Duration(seconds: seconds - i);
-          _notify();
-          await _sleep(const Duration(seconds: 1), gen);
-        }
-        _actionRemaining = Duration.zero;
-        _acting = null;
-        _log(act.eventType, FaceMode.action, details: {'duration_ms': act.duration.inMilliseconds, 'completed': true});
-        _notify();
+        await _playFor(sounds.action, duration, gen);
+        _log(eventType, FaceMode.action, details: {'duration_ms': duration.inMilliseconds, 'completed': true});
       case FinishStep():
-        _caption = null;
         _setMode(FaceMode.idle);
         _play(sounds.idle);
         _log('session_completed', FaceMode.idle, details: {'steps': script.length});
@@ -203,17 +171,15 @@ class Conversation extends ChangeNotifier {
     _check(gen);
   }
 
-  Future<AnswerOption?> _waitForAnswer(int gen) async {
-    final pending = Completer<AnswerOption?>();
-    _answer = pending;
-    _timer = Timer(listenTimeout, () {
-      if (!pending.isCompleted) pending.complete(null);
-    });
-    final chosen = await pending.future;
-    _timer?.cancel();
-    _answer = null;
-    _check(gen);
-    return chosen;
+  /// Plays [sound] for [total], starting it again whenever it ends.
+  Future<void> _playFor(SynthSound sound, Duration total, int gen) async {
+    var left = total;
+    while (left > Duration.zero) {
+      _play(sound);
+      final chunk = sound.duration > Duration.zero && sound.duration < left ? sound.duration : left;
+      await _sleep(chunk, gen);
+      left -= chunk;
+    }
   }
 
   void _play(SynthSound sound) {
@@ -231,17 +197,10 @@ class Conversation extends ChangeNotifier {
     }, onError: (Object e) => debugPrint('audio: $e'));
   }
 
-  void _log(String type, FaceMode mode, {String? question, String? answer, Map<String, Object?> details = const {}}) {
+  void _log(String type, FaceMode mode, {Map<String, Object?> details = const {}}) {
     final id = _sessionId;
     if (id == null) return;
-    unawaited(events.log(HgEvent(
-      sessionId: id,
-      eventType: type,
-      mode: mode.name,
-      question: question,
-      answer: answer,
-      details: details,
-    )));
+    unawaited(events.log(HgEvent(sessionId: id, eventType: type, mode: mode.name, details: details)));
   }
 
   void _setMode(FaceMode m) {

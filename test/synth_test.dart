@@ -1,27 +1,30 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:health_guardians/audio/sound_bank.dart';
 import 'package:health_guardians/audio/synth.dart';
-import 'package:health_guardians/conversation/script.dart';
+
+import 'fakes.dart';
 
 int _u32(Uint8List b, int i) => ByteData.sublistView(b).getUint32(i, Endian.little);
 int _u16(Uint8List b, int i) => ByteData.sublistView(b).getUint16(i, Endian.little);
 String _tag(Uint8List b, int i) => String.fromCharCodes(b.sublist(i, i + 4));
 
 void main() {
-  final bank = SoundBank.build(phrasesOf(checkInScript));
+  final bank = testBank();
+  final synth = Synth();
+  final modeSounds = [bank.listening, bank.interlude, bank.action, bank.idle];
 
-  test('every sound lasts 4 to 8 seconds', () {
-    for (final s in bank.all) {
-      expect(s.seconds, inInclusiveRange(4.0, 8.0), reason: s.name);
+  test('mode sounds last 4 to 10 seconds; the bank holds the clips and the mode sounds', () {
+    for (final s in modeSounds) {
+      expect(s.seconds, inInclusiveRange(4.0, 10.0), reason: s.name);
     }
-    expect(bank.all.length, 4 + 3);
+    expect(bank.interlude.seconds, 10.0);
+    expect(bank.all.length, 4 + 4);
   });
 
   test('longer phrases last longer', () {
-    expect(bank.phrase('Did you take your daily medication?').seconds,
-        greaterThan(bank.phrase('Great you did it!').seconds));
+    expect(synth.speech('Did you take your daily medication?').seconds,
+        greaterThan(synth.speech('Great you did it!').seconds));
   });
 
   test('sounds are valid 16-bit mono WAV files', () {
@@ -41,7 +44,7 @@ void main() {
   });
 
   test('sounds are audible and not clipped', () {
-    for (final s in bank.all) {
+    for (final s in modeSounds) {
       final pcm = ByteData.sublistView(s.wav, 44);
       var peak = 0;
       for (var i = 0; i + 1 < pcm.lengthInBytes; i += 2) {
@@ -54,7 +57,7 @@ void main() {
   });
 
   test('envelope follows the sound: silent lead-in, loud syllables, pauses between words', () {
-    final s = bank.phrase('How are you today?');
+    final s = synth.speech('How are you today?');
     expect(s.envelope.length, (s.seconds * 50).ceil());
     expect(s.envelope.reduce((a, b) => a > b ? a : b), closeTo(1.0, 1e-6));
     expect(s.envelopeAt(0.1), lessThan(0.05), reason: 'lead-in');

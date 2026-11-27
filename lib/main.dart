@@ -24,6 +24,17 @@ Future<void> main() async {
   runApp(const HealthGuardiansApp());
 }
 
+/// Reads the voice clips of [demoScript] from the assets and prepares all sounds in a background
+/// isolate.
+Future<SoundBank> loadSoundBank(AssetBundle bundle) async {
+  final wavs = <String, Uint8List>{};
+  for (final voice in voicesOf(demoScript)) {
+    final data = await bundle.load(voiceAsset(voice));
+    wavs[voice] = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  }
+  return compute(SoundBank.build, wavs);
+}
+
 class HealthGuardiansApp extends StatelessWidget {
   const HealthGuardiansApp({super.key});
 
@@ -56,6 +67,7 @@ class _RootState extends State<_Root> {
   final AudioOut _audio = NativeAudioOut();
   Session? _session;
   SoundBank? _sounds;
+  String? _soundError;
   bool _offline = false;
   final LocalEventLog _localLog = LocalEventLog();
   SupabaseEventLog? _log;
@@ -68,9 +80,12 @@ class _RootState extends State<_Root> {
     _authSub = _client.auth.onAuthStateChange.listen((state) {
       if (mounted) setState(() => _session = state.session);
     });
-    // synthesise all sounds once, off the UI thread
-    compute(SoundBank.build, phrasesOf(checkInScript)).then((bank) {
+    // load the voice clips and prepare all sounds once, off the UI thread
+    loadSoundBank(rootBundle).then((bank) {
       if (mounted) setState(() => _sounds = bank);
+    }, onError: (Object e) {
+      debugPrint('sounds: $e');
+      if (mounted) setState(() => _soundError = '$e');
     });
   }
 
@@ -92,6 +107,13 @@ class _RootState extends State<_Root> {
   Widget build(BuildContext context) {
     final sounds = _sounds;
     if (sounds == null) {
+      final error = _soundError;
+      if (error != null) {
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: Center(child: Text('Sound files missing: $error', style: const TextStyle(color: Colors.white54))),
+        );
+      }
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))),
@@ -115,6 +137,7 @@ class _RootState extends State<_Root> {
         audio: _audio,
         events: _localLog,
         onSignOut: () => setState(() => _offline = false),
+        autoStart: true, // the demo runs once, right after "Continue without signing in"
       );
     }
     return LoginScreen(onContinueOffline: () => setState(() => _offline = true));

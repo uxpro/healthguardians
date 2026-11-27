@@ -1,7 +1,7 @@
 # HealthGuardians
 
 Android app (Flutter) that shows an AI humanoid face for a daily health check-in. The screen is
-horizontal with a black background. The face speaks synthesised phrases, listens for answers, demonstrates
+horizontal with a black background. The face plays a recorded demo conversation, listens, leads
 exercises, and logs each step to the Fluffy Bytes **production** database. It signs in with the
 same accounts (same JWT) as the FluffyPaw app.
 
@@ -38,25 +38,43 @@ with the `nc@hg.com` account appear there as events of Humanoid OEM B UUID.
 | Mode | Colour | Motion | Sound |
 |---|---|---|---|
 | Idling | grey | eyes rest apart and drift slightly from side to side; an energy beam pulses at a low frequency | low hum, 4 s |
-| Speaking | energetic blue | eyes move from the sides to the centre and collide into one bigger shape for 800 ms, then rewind; speed, wave and aura follow the loudness of the sound | robotic voice, 4–8 s per phrase |
-| Listening | energetic purple | the speaking animation in reverse: the eyes burst apart from the centre to the sides, stay wide, and return | two-tone chirp and soft hum, 4 s |
-| Action | calm yellow | eyes at rest; every shape grows and shrinks on its own slow, organic pulse | calm chord, 5 s played twice |
+| Speaking | energetic blue | eyes move from the sides to the centre and collide into one bigger shape for 800 ms, then rewind; speed, wave and aura follow the loudness of the sound | recorded voice clip (`assets/voice/`) |
+| Listening | energetic purple | the speaking animation in reverse: the eyes burst apart from the centre to the sides, stay wide, and return | two-tone chirp and soft hum, 4 s, or the 10 s musical interlude |
+| Action | calm yellow | eyes at rest; every shape grows and shrinks on its own slow, organic pulse | calm chord, 5 s, repeated |
 
 - Each eye is a honeycomb of hexagons. Each shape has a solid colour that fades towards its edges.
 - The motion comes from changing the size of each shape as a virtual wave passes through them. The wave runs inward when speaking, outward when listening, and sweeps slowly from left to right when idling.
 - A translucent aura in a brighter tone of the mode's colour glows behind the eyes. It gets stronger as the sound gets louder.
-- The sounds are generated in code (`lib/audio/synth.dart`) as WAV data. They play through an `AudioTrack` in `MainActivity.kt`, so no audio plugin is needed. The animation reads the loudness envelope of the sound that is playing.
+- The voice is recorded (`assets/voice/*.wav`); the mode sounds are generated in code (`lib/audio/synth.dart`) as WAV data. They play through an `AudioTrack` in `MainActivity.kt`, so no audio plugin is needed. The animation reads the loudness envelope of the sound that is playing.
 
-## Check-in script (`lib/conversation/script.dart`)
+## Demo conversation (`lib/conversation/script.dart`)
 
-1. Speaking: "How are you today?" → Listening: answer Good / Okay / Not so good → event `mood_answer`
-2. Speaking: "Did you take your daily medication?" → Listening: Yes / No → event `medication_answer`
-3. Speaking: "Let me show you these exercises" → Action: 10 s exercise demo → event `exercise_demo`
-4. Speaking: "Great you did it!" → Idling → event `session_completed`
+The face speaks the recorded clips in `assets/voice/` and changes mode in step with them. Nothing is
+written on screen: no captions, no answer buttons, no countdown.
 
-Tap the face to start a check-in. For now the answers are given with buttons. Questions not answered
-within 20 s are logged as `no_answer`. Speech recognition and the Edge Functions for the backend come
-later.
+| # | Mode | What plays | Length |
+|---|---|---|---|
+| 1 | Idling | resting hum | 1.2 s |
+| 2 | Speaking | `speaking_1.wav` "Hey young man, why are you in this hospital, how is the day going?" | 3.1 s |
+| 3 | Listening | listening hum (the patient answers) | 4 s |
+| 4 | Speaking | `speaking_2.wav` "You know I don't have to take pills … would you do me the favour?" | 14.8 s |
+| 5 | Listening | musical interlude (synthesised) while the patient takes the pill | 10 s |
+| 6 | Speaking | `speaking_3.wav` "Oh thanks, now we are talking … let's go for some stretching, mate!" | 3.9 s |
+| 7 | Action | calm chord, stretching (10 reps) → event `exercise_demo` | 20 s |
+| 8 | Speaking | `speaking_4.wav` "Awesome … 10 reps! … see you later, alligator." | 8.8 s |
+| 9 | Idling | resting hum → event `session_completed` | – |
+
+Each clip is followed by a 0.4 s pause; the whole demo takes about 67 s. To change the timing, edit
+`demoScript`. To replace a clip, overwrite the WAV (16-bit PCM, mono or stereo; any sample rate):
+
+```powershell
+ffmpeg -i SPEAKING_1.mp3 -ac 1 -ar 22050 -c:a pcm_s16le assets\voice\speaking_1.wav
+```
+
+- **Continue without signing in** starts the demo once, by itself. Tapping the face does nothing; to run
+  it again, go back with the sign-in icon (top right) and press the button again.
+- **Signed in:** tap the face to start the same conversation; the steps are logged to `hg_events`.
+- The faint stop icon (top right) ends it at any time.
 
 ## Event log
 
@@ -77,7 +95,8 @@ lib/
   main.dart                 landscape + immersive, Supabase init, sign-in or face
   config.dart               production project URL and publishable key (client-safe)
   audio/synth.dart          WAV synthesis and loudness envelope
-  audio/sound_bank.dart     all sounds, synthesised once in a background isolate
+  audio/sound_bank.dart     voice clips + mode sounds, prepared once in a background isolate
+assets/voice/               the four recorded clips (WAV)
   audio/audio_out.dart      MethodChannel "healthguardians/audio" → MainActivity.kt
   face/face_motion.dart     motion of each mode (pure Dart, tested)
   face/face_painter.dart    drawing: shapes, aura, beam, flash
