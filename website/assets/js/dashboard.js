@@ -35,6 +35,7 @@ const S = {
   speech: false,
   timers: [],
   latest: null,        // newest event shown in the animation widget
+  plots: new Set(),    // customer dashboard: plots the user has revealed
 };
 
 const isAdmin = () => S.me?.role === 'admin';
@@ -42,13 +43,20 @@ const customer = () => S.me?.customer || null;
 const selected = () => S.fleet.find((h) => h.id === S.selectedId) || null;
 
 // ---------------------------------------------------------------- views per role
-const VIEWS_USER = [
-  ['overview', 'Overview'],
-  ['account', 'Account details'],
-  ['extension', 'Request rental period extension'],
-  ['ticket', 'Create a support ticket'],
-  ['export', 'Export events to Excel'],
+// customer dashboard: tabs (F1-F4) and the menu in the top bar
+const conversation = () => customer()?.use_case === 'conversation_support';
+const TABS_USER = () => (conversation()
+  ? [['overview', 'Overview'], ['face', 'Virtual face'], ['activity', 'Activity & log'], ['demo', 'Demo events']]
+  : [['overview', 'Overview'], ['environment', 'Environment'], ['activity', 'Activity & log']]);
+const MENU_USER = [
+  ['account', 'Account'],
+  ['extension', 'Rental extension'],
+  ['ticket', 'Support ticket'],
+  ['export', 'Export'],
 ];
+const VIEWS_USER = [['overview', 'Overview'], ['face', 'Virtual face'], ['environment', 'Environment'], ['activity', 'Activity & log'],
+  ['demo', 'Demo events'], ['account', 'Account details'], ['extension', 'Request rental period extension'],
+  ['ticket', 'Create a support ticket'], ['export', 'Export events to Excel']];
 const VIEWS_ADMIN = [
   ['fleet', 'Fleet overview'],
   ['account', 'Account details'],
@@ -170,6 +178,7 @@ function startSimulation() {
 
 // ---------------------------------------------------------------- shell
 function renderTop() {
+  if (!isAdmin()) { renderTopUser(); return; }
   const c = customer();
   const initials = c ? c.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() : 'HG';
   $('#top').innerHTML = `
@@ -188,15 +197,69 @@ function renderTop() {
   renderSync();
 }
 
+// Customer dashboard (console style): one-line menu bar, F1-F4 tabs, status bar at the bottom.
+function renderTopUser() {
+  const c = customer();
+  document.body.classList.add('dos');
+  $('#side').hidden = true;
+  $('#top').innerHTML = `
+    <div class="dos-bar">
+      <span class="dos-brand">HEALTH GUARDIANS ▸ ${e(c.name.toUpperCase())}</span>
+      <span class="title sr-only">${e(c.name)} dashboard</span>
+      <span class="dos-sub">${e(humanize(c.unique_id))} · ${e(humanize(c.use_case))}</span>
+      <span class="dos-sp"></span>
+      <span id="sync"></span>
+      <span id="who">${e(S.me.display_name || S.me.email)} · User</span>
+      <nav class="dos-menu" aria-label="Account and requests">${MENU_USER.map(([id, t]) =>
+        `<button data-view="${id}">${e(t)}</button>`).join('')}<a href="index.html">Website</a><button id="sign-out">Sign out</button></nav>
+    </div>
+    <div class="dos-tabs" role="tablist" aria-label="Dashboard">${TABS_USER().map(([id, t], i) =>
+      `<button role="tab" data-view="${id}" aria-selected="false"><b>F${i + 1}</b>${e(t)}</button>`).join('')}</div>`;
+  $('#top').querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => go(b.dataset.view)));
+  $('#sign-out').addEventListener('click', signOut);
+  bindCustomerClicks();
+  const bar = document.createElement('footer');
+  bar.className = 'dos-status';
+  bar.id = 'dos-status';
+  document.body.append(bar);
+  document.addEventListener('keydown', (ev) => {
+    const n = /^F([1-9])$/.exec(ev.key);
+    const tab = n && TABS_USER()[Number(n[1]) - 1];
+    if (!tab || ev.altKey || ev.ctrlKey || ev.metaKey) return;
+    ev.preventDefault();
+    go(tab[0]);
+  });
+  renderSync();
+}
+
+function markTabs() {
+  $('#top').querySelectorAll('[role="tab"]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === S.view)));
+  $('#top').querySelectorAll('.dos-menu [data-view]').forEach((b) => b.toggleAttribute('aria-current', b.dataset.view === S.view));
+  const who = $('#who');
+  if (who) who.textContent = `${S.me.display_name || S.me.email} · User`;
+  const bar = $('#dos-status');
+  if (bar) {
+    bar.innerHTML = `${TABS_USER().map(([id, t], i) => `<span><b>F${i + 1}</b>${e(t)}</span>`).join('')}<span class="dos-sp"></span>
+      <span>${customer()?.simulated ? 'Simulated events (demo)' : 'Live database events'}</span>`;
+  }
+}
+
 function renderSync() {
   const el = $('#sync');
   if (!el) return;
+  if (!isAdmin()) {
+    el.innerHTML = S.syncOk ? `<span class="sync-dot"></span>LIVE${S.lastSync ? ` ${fmtTime(S.lastSync)}` : ''}`
+      : '<span class="sync-dot off"></span>OFFLINE, retrying';
+    el.title = `Polling every ${CONFIG.pollMs / 1000} s`;
+    return;
+  }
   el.innerHTML = S.syncOk
     ? `<span class="sync-dot"></span>Live · polling every ${CONFIG.pollMs / 1000} s${S.lastSync ? ` · synced ${fmtTime(S.lastSync)}` : ''}`
     : '<span class="sync-dot off"></span>Connection lost, retrying...';
 }
 
 function renderSide() {
+  if (!isAdmin()) { markTabs(); return; }
   const head = isAdmin()
     ? `<div class="side-head"><p class="kicker">HG Group</p><b>${e(S.me.display_name || S.me.email)}</b><br><span class="chip purple" style="margin-top:6px">Admin</span></div>`
     : `<div class="side-head"><p class="kicker">${e(customer().name)}</p><b>${e(S.me.display_name || S.me.email)}</b><br><span class="chip mint" style="margin-top:6px">User</span></div>`;
@@ -217,6 +280,7 @@ function go(view, { log = true } = {}) {
   S.view = view;
   renderSide();
   renderView();
+  $('#main').classList.toggle('dos-fit', !isAdmin() && ['overview', 'face', 'environment', 'activity', 'demo'].includes(view));
   if (log) logAction('open_view', { view });
   $('#main').focus({ preventScroll: true });
   window.scrollTo(0, 0);
@@ -293,13 +357,14 @@ function overviewTable(h) {
     </table></div>`;
 }
 
-function robotLog(h, { gateway = false } = {}) {
-  const list = eventsFor(h?.id).slice(0, 120);
+function robotLog(h, { gateway = false, limit = 120 } = {}) {
+  const list = eventsFor(h?.id).slice(0, limit);
   const rows = list.map((ev) => `<tr>
       <td>${fmtDate(ev.created_at)}</td><td>${fmtTime(ev.created_at)}</td><td class="mono">${ev.code}</td>
       <td class="type"><span class="chip ${typeClass(ev.type)}">${e(humanize(ev.type))}</span></td>
       <td>${e(ev.name)}</td>${gateway ? `<td>${e(humanize(ev.source))}</td>` : `<td>${e(payloadText(ev.payload)) || '<span class="muted">-</span>'}</td>`}</tr>`).join('');
-  return `<div id="robot-log"><h3 style="margin-top:4px">${gateway ? 'Robot log: requests sent through our gateway' : 'Robot log'}</h3>
+  const head = isAdmin() ? `<h3 style="margin-top:4px">${gateway ? 'Robot log: requests sent through our gateway' : 'Robot log'}</h3>` : '';
+  return `<div id="robot-log">${head}
     <div class="table-scroll"><table class="brut log-table">
       <thead><tr><th>Date</th><th>Time</th><th>Code</th><th>Type</th><th>Event</th><th>${gateway ? 'Source' : 'Payload'}</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="6" class="empty">No events in the last 24 hours</td></tr>`}</tbody>
@@ -312,90 +377,187 @@ function eventsChart(list) {
     <div class="legend"><span><i style="background:#1dbf73"></i>Keep alive only</span><span><i style="background:#f2545b"></i>Hour with alerts</span></div></div>`;
 }
 
-// ---------------------------------------------------------------- customer overview
+// ---------------------------------------------------------------- customer dashboard (console style)
+// One screen per tab, no page scrolling: boxes in a 3-column grid, the robot picture always top right.
+function box(title, body, { cls = '', id = '' } = {}) {
+  return `<section class="dbox ${cls}"${id ? ` id="${id}"` : ''}><h3>${title}</h3><div class="dbox-body">${body}</div></section>`;
+}
+
+const useCaseTitle = () => (conversation() ? 'Conversation support' : 'Fall detection');
+
+function chipFor(kind, value) {
+  const map = kind === 'state'
+    ? { deployed: 'green', in_stock: 'blue', maintenance: 'yellow', in_transit: 'purple' }
+    : { passed: 'green', passed_with_warnings: 'yellow', failed: 'red' };
+  return `<span class="chip ${map[value] || 'grey'}">${e(humanize(value))}</span>`;
+}
+
+function humanoidSelect() {
+  return `<label class="sr-only" for="humanoid-select">Humanoid</label>
+    <select id="humanoid-select">${S.fleet.map((h) =>
+      `<option value="${e(h.id)}" ${h.id === S.selectedId ? 'selected' : ''}>${e(humanize(h.label))} · ${e(humanize(h.model_id))}${h.live ? ' · live' : ''}</option>`).join('')}</select>`;
+}
+
+function robotBox(h) {
+  return box(e(humanize(h.model_id)), `<div class="dos-robot">${robotSvg(h, { line: true })}</div>
+    <table class="dkv">
+      <tr><th>Humanoid</th><td>${e(humanize(h.label))}</td></tr>
+      <tr><th>Locomotion</th><td>${e(humanize(h.locomotion || '-'))}</td></tr>
+      <tr><th>State</th><td>${chipFor('state', h.instance_status)}</td></tr>
+    </table>
+    <p class="dos-hint">Placeholder drawing; the model photo follows.</p>`, { cls: 'robot-box' });
+}
+
+function overviewKv(h) {
+  return `<table class="dkv">
+    <tr><th>Incidents (30 days)</th><td><b id="incidents">${incidents30(h)}</b></td></tr>
+    <tr><th>State</th><td>${chipFor('state', h.instance_status)}</td></tr>
+    <tr><th>Battery autonomy</th><td>${fmtHours(h.battery_autonomy_h)}</td></tr>
+    <tr><th>System test</th><td>${chipFor('test', h.system_test)} ${fmtDate(h.system_test_on)}</td></tr>
+    <tr><th>Next maintenance</th><td>${fmtDate(h.next_maintenance)}</td></tr>
+    <tr><th>Integrity flags</th><td>${leds(h.integrity_flag)}</td></tr>
+  </table>`;
+}
+
+function capabilityList(h) {
+  return `<ul class="dos-caps">${FEATURES.map((f) => {
+    const on = (h.features || []).includes(f);
+    return `<li class="${on ? '' : 'off'}">${e(humanize(f))}<span>${on ? '● ON' : '○ OFF'}</span></li>`;
+  }).join('')}</ul>`;
+}
+
+function eventsChartPlain(list) {
+  return `<div class="chart">${barChart(eventsPerHour(list), { title: 'Events per hour' })}
+    <div class="legend"><span><i style="background:#1dbf73"></i>Keep alive only</span><span><i style="background:#f2545b"></i>Hour with alerts</span></div></div>`;
+}
+
+function tempChart(h) {
+  const pts = environment(S.fleet.indexOf(h)).points;
+  return `<div class="chart">${lineChart({
+    title: 'Room temperature, last 24 hours',
+    series: [{ name: 'Temperature', fill: '#a8e6c5', points: pts.map((p) => ({ x: p.t, y: p.temperature })) }],
+    yMin: 16, yMax: 30, hLines: [{ y: 26, label: 'Alarm above 26 °C' }],
+    xFormat: (t) => `${String(new Date(t).getHours()).padStart(2, '0')}h`, yFormat: (v) => `${v}°`,
+  })}</div>`;
+}
+
+// Plots stay hidden until the user asks for them.
+const PLOTS = {
+  hour: { title: 'Events per hour · last 24 h', render: (h) => eventsChartPlain(eventsFor(h.id)), wrap: 'events-chart-wrap' },
+  temp: { title: 'Room temperature · last 24 h', render: (h) => tempChart(h), wrap: 'temp-chart-wrap' },
+};
+
+function plotBlock(key, h) {
+  const p = PLOTS[key];
+  const open = S.plots.has(key);
+  return `<div class="plot ${open ? 'open' : ''}" id="plot-${key}">
+    <div class="plot-head"><span>${e(p.title)}</span>
+      <button class="dbtn" data-plot="${key}" aria-expanded="${open}">${open ? '▾ Hide plot' : '▸ Show plot'}</button></div>
+    ${open ? `<div class="plot-body" id="${p.wrap}">${p.render(h)}</div>` : '<div class="plot-off">Plot hidden</div>'}</div>`;
+}
+
+function todayBody(h, list) {
+  return `<div class="dos-stats">
+      <div><b class="big" id="events-today">${countToday(list)}</b><span>events · ${e(humanize(h.label))}</span></div>
+      <div><b class="big" id="events-today-all">${countToday(S.events)}</b><span>events · all humanoids</span></div>
+      <div><b class="big">${S.fleet.length}</b><span>humanoids · your fleet</span></div>
+    </div>
+    ${eventWidget()}
+    ${customer().simulated ? '<p class="dos-hint"><span class="chip yellow">Simulated events (demo)</span> generated in this browser, not stored</p>' : ''}`;
+}
+
+function supportBody() {
+  return `<table class="dkv">
+    <tr><th>Powered by</th><td>HG Group</td></tr>
+    <tr><th>E-mail</th><td style="font-size:11.5px">support@healthguardians.example</td></tr>
+  </table>
+  <div class="dos-actions"><button class="dbtn" data-view="extension">Rental extension</button><button class="dbtn" data-view="ticket">Support ticket</button></div>`;
+}
+
+function noHumanoid() {
+  return `<h1>${e(customer().name)}</h1><p class="notice">No humanoids are deployed for this account yet.</p>`;
+}
+
 function customerOverview() {
   const h = selected();
-  const c = customer();
-  if (!h) return `<h1>${e(c.name)}</h1><p class="notice">No humanoids are deployed for this account yet.</p>`;
-  const list = eventsFor(h.id);
-  const conv = c.use_case === 'conversation_support';
-  return `
-    <p class="kicker">${e(humanize(c.unique_id))}${c.simulated ? ' · <span class="chip yellow">Simulated events (demo)</span>' : ' · <span class="chip green">Live database events</span>'}</p>
-    <h1>${conv ? 'Conversation support' : 'Fall detection'}</h1>
-    <div class="dash-grid" style="margin-top:18px">
-      <div class="span-8 stack">
-        ${selectHumanoidCard(S.fleet)}
-        ${eventWidget()}
-        ${overviewTable(h)}
-        <div class="dash-grid">
-          <div class="span-5">${capabilities(h)}</div>
-          <div class="span-7" id="events-chart-wrap">${eventsChart(list)}</div>
-        </div>
-        ${conv ? conversationPanel(h) : fallPanel(h)}
-        <div class="card">${robotLog(h)}</div>
-      </div>
-      <aside class="span-4 stack">
-        <div class="card green"><p class="kicker">Events today</p><div class="big-number" id="events-today">${countToday(list)}</div>
-          <p style="margin:6px 0 0">for ${e(humanize(h.label))} · <span id="events-today-all">${countToday(S.events)}</span> for all your humanoids</p></div>
-        <div class="card"><p class="kicker">Linked to patient UUID</p><p class="mono" style="word-break:break-all;margin:0">${e(h.demo_patient_uuid || 'Not linked')}</p>
-          <p class="hint">Anonymous ID. Only your clinic can match it to a person.</p></div>
-        <div class="card"><p class="kicker">${e(humanize(h.model_id))}</p><div class="robot-figure">${robotSvg(h)}</div>
-          <p class="hint">Dummy picture; the model photo follows.</p></div>
-        <div class="card ink"><b>Powered by HG Group</b><p style="margin:6px 0 0">Support: support@healthguardians.example</p></div>
-      </aside>
-    </div>`;
+  if (!h) return noHumanoid();
+  return `<h1 class="sr-only">${useCaseTitle()} · Overview</h1>
+  <div class="dos-grid">
+    ${box('Humanoid', `${humanoidSelect()}<table class="dkv">
+      <tr><th>UUID</th><td class="mono">${e(h.id)}</td></tr>
+      <tr><th>Patient UUID</th><td class="mono">${e(h.demo_patient_uuid || 'Not linked')}</td></tr>
+      <tr><th>Patient match</th><td>Anonymous · only your clinic</td></tr></table>`)}
+    ${box('Today', todayBody(h, eventsFor(h.id)))}
+    ${robotBox(h)}
+    ${box('General overview', overviewKv(h), { id: 'overview-card' })}
+    ${box('Capabilities', capabilityList(h) + plotBlock('hour', h))}
+    ${box('Latest robot log', robotLog(h, { limit: 40 }), { cls: 'span2 grow' })}
+    ${box('Support', supportBody(), { cls: 'grow' })}
+  </div>`;
 }
 
-function fallPanel(h) {
-  const idx = S.fleet.indexOf(h);
-  const env = environment(idx);
-  const pts = env.points;
+function customerFace() {
+  const h = selected();
+  if (!h) return noHumanoid();
+  const live = S.fleet.find((x) => x.live);
+  const faceBox = h.live
+    ? box('Robotic virtual face', `<div class="face-wrap"><span class="chip face-mode" id="face-mode">Idling</span><canvas id="face" aria-hidden="true"></canvas>
+        <div class="face-caption" id="face-caption">Press "Start check-in" to talk to the patient.</div></div>`, { cls: 'span2 rows3 face-box' })
+    : box('Robotic virtual face', `<p>The check-in of ${e(humanize(h.label))} runs on the humanoid itself; its events appear in the log.</p>
+        ${live ? `<p>The live demo humanoid is <b>${e(humanize(live.label))}</b>. Select it to run the check-in here.</p>` : ''}`, { cls: 'span2 rows3' });
+  const control = box('Check-in', `${humanoidSelect()}
+      ${h.live ? `<label class="dos-check"><input type="checkbox" id="voice" ${S.speech ? 'checked' : ''}> Voice</label>
+      <div class="dos-actions"><button class="dbtn primary" id="start-checkin">Start check-in</button><button class="dbtn" id="stop-checkin" disabled>Stop</button></div>
+      <p class="dos-label">Patient answer</p>
+      <div class="answers" id="answers"><span class="dos-hint">The answer buttons appear while the face is listening.</span></div>
+      <p class="dos-hint">Same daily check-in as the HealthGuardians app. Every answer is saved as an event; worrying answers raise an emergency.</p>` : ''}`, { cls: 'grow' });
+  return `<h1 class="sr-only">${useCaseTitle()} · Virtual face</h1><div class="dos-grid">${faceBox}${robotBox(h)}${control}</div>`;
+}
+
+function customerEnvironment() {
+  const h = selected();
+  if (!h) return noHumanoid();
+  const env = environment(S.fleet.indexOf(h));
   const reminders = (h.features || []).flatMap((f) => (REMINDERS[f] || []).map((r) => ({ ...r, f })))
     .sort((a, b) => a.at.localeCompare(b.at));
-  return `<div class="card">
-    <h3>Environmental data (room of ${e(humanize(h.label))})</h3>
-    <div class="grid three" style="gap:14px;margin-bottom:14px">
-      <div class="card flat mint"><p class="kicker">Temperature</p><div class="big-number">${env.current.temperature} °C</div></div>
-      <div class="card flat mint"><p class="kicker">Humidity</p><div class="big-number">${env.current.humidity} %</div></div>
-      <div class="card flat mint"><p class="kicker">Air quality</p><div class="big-number">${env.current.co2}</div><span class="muted">ppm CO2</span></div>
-    </div>
-    <div class="chart">${lineChart({
-      title: 'Room temperature, last 24 hours',
-      series: [{ name: 'Temperature', fill: '#a8e6c5', points: pts.map((p) => ({ x: p.t, y: p.temperature })) }],
-      yMin: 16, yMax: 30, hLines: [{ y: 26, label: 'Alarm above 26 °C' }],
-      xFormat: (t) => `${String(new Date(t).getHours()).padStart(2, '0')}h`, yFormat: (v) => `${v}°`,
-    })}</div>
-  </div>
-  <div class="card"><h3>Friendly reminders (based on the available features)</h3>
-    <table class="brut"><thead><tr><th>Time</th><th>Reminder</th><th>Feature</th></tr></thead><tbody>
-    ${reminders.map((r) => `<tr><td class="mono">${e(r.at)}</td><td>${e(r.text)}</td><td><span class="chip mint">${e(humanize(r.f))}</span></td></tr>`).join('')
-      || '<tr><td colspan="3" class="empty">No reminder feature on this humanoid</td></tr>'}
-    </tbody></table></div>`;
+  return `<h1 class="sr-only">${useCaseTitle()} · Environment</h1><div class="dos-grid">
+    ${box(`Environmental data · room of ${e(humanize(h.label))}`, `<div class="dos-stats">
+        <div><b class="big">${env.current.temperature} °C</b><span>temperature</span></div>
+        <div><b class="big">${env.current.humidity} %</b><span>humidity</span></div>
+        <div><b class="big">${env.current.co2}</b><span>ppm CO2 · air quality</span></div></div>
+        ${plotBlock('temp', h)}`, { cls: 'span2' })}
+    ${robotBox(h)}
+    ${box('Friendly reminders (based on the available features)', `<div class="table-scroll"><table class="brut"><thead><tr><th>Time</th><th>Reminder</th><th>Feature</th></tr></thead><tbody>
+      ${reminders.map((r) => `<tr><td class="mono">${e(r.at)}</td><td>${e(r.text)}</td><td>${e(humanize(r.f))}</td></tr>`).join('')
+        || '<tr><td colspan="3" class="empty">No reminder feature on this humanoid</td></tr>'}</tbody></table></div>`, { cls: 'span2 rows23 grow' })}
+    ${box('Humanoid', `${humanoidSelect()}${overviewKv(h).replace('id="incidents"', '')}`, { cls: 'grow' })}
+  </div>`;
 }
 
-function conversationPanel(h) {
-  const injectable = h.instance_status === 'deployed';
-  const face = h.live
-    ? `<div class="card">
-        <div class="row"><h3 style="margin:0">Robotic virtual face</h3><span class="spacer"></span>
-          <label class="row" style="margin:0;font-weight:600"><input type="checkbox" id="voice" ${S.speech ? 'checked' : ''} style="width:auto;box-shadow:none"> Voice</label></div>
-        <p class="muted">Runs the same daily check-in as the HealthGuardians app on this humanoid. Each answer is saved as an
-        event and appears in the robot log; worrying answers raise an emergency.</p>
-        <div class="face-wrap"><span class="chip face-mode" id="face-mode">Idling</span><canvas id="face" aria-hidden="true"></canvas>
-          <div class="face-caption" id="face-caption">Tap "Start check-in" to talk to the patient.</div></div>
-        <div class="row" style="margin-top:14px"><button class="btn primary" id="start-checkin">Start check-in</button>
-          <button class="btn" id="stop-checkin" disabled>Stop</button></div>
-        <p class="kicker" style="margin-top:14px">Patient answer</p>
-        <div class="answers" id="answers"><span class="muted">The answer buttons appear while the face is listening.</span></div>
-      </div>`
-    : `<div class="card"><h3>Conversation</h3><p>The check-in of ${e(humanize(h.label))} runs on the humanoid itself. Its events appear here as they arrive.
-       The live demo humanoid is <b>${e(humanize(S.fleet.find((x) => x.live)?.label || 'Humanoid_OEM_B_UUID'))}</b>.</p></div>`;
-  const inject = injectable ? `<div class="card mint"><h3>Demo data injection</h3>
-      <p>Sends a real event for ${e(humanize(h.label))} to the database. It shows up here and on the logistics dashboard within seconds.</p>
+function customerActivity() {
+  const h = selected();
+  if (!h) return noHumanoid();
+  return `<h1 class="sr-only">${useCaseTitle()} · Activity and log</h1><div class="dos-grid">
+    ${box('Activity', plotBlock('hour', h), { cls: 'span2' })}
+    ${robotBox(h)}
+    ${box('Robot log · last 24 hours', robotLog(h), { cls: 'span2 rows23 grow' })}
+    ${box('Today', `${humanoidSelect()}${todayBody(h, eventsFor(h.id))}<div class="dos-actions"><button class="dbtn" data-view="export">Export to Excel</button></div>`, { cls: 'grow' })}
+  </div>`;
+}
+
+function customerDemo() {
+  const h = selected();
+  if (!h) return noHumanoid();
+  const ok = h.instance_status === 'deployed';
+  return `<h1 class="sr-only">${useCaseTitle()} · Demo events</h1><div class="dos-grid">
+    ${box('Demo data injection', ok ? `<p>Sends a real event for ${e(humanize(h.label))} to the database. It shows up here and on the logistics dashboard within seconds.</p>
       <div class="field"><label for="inject-note">Note (optional)</label><input id="inject-note" maxlength="140" placeholder="e.g. Room 2.07"></div>
-      <div class="inject-grid">${INJECT_BUTTONS.map((b) => `<button class="btn small ${b.code >= 128 ? 'danger' : b.code >= 64 ? 'warn' : ''}" data-inject="${b.code}">${e(b.label)} <span class="mono">(${b.code})</span></button>`).join('')}</div>
-      <p id="inject-msg" role="status" style="margin:10px 0 0"></p></div>` : '';
-  return face + inject;
+      <div class="inject-grid">${INJECT_BUTTONS.map((b) => `<button class="dbtn ${b.code >= 128 ? 'danger' : b.code >= 64 ? 'warn' : ''}" data-inject="${b.code}">${e(b.label)} <span class="mono">(${b.code})</span></button>`).join('')}</div>
+      <p id="inject-msg" role="status"></p>` : `<p>${e(humanize(h.label))} is not deployed, so no events can be sent for it.</p>`, { cls: 'span2' })}
+    ${robotBox(h)}
+    ${box('Latest robot log', robotLog(h, { limit: 40 }), { cls: 'span2 rows23 grow' })}
+    ${box('Humanoid', `${humanoidSelect()}<p class="dos-hint">Events are sent for the selected humanoid.</p>`, { cls: 'grow' })}
+  </div>`;
 }
 
 function bindCustomerOverview() {
@@ -443,13 +605,30 @@ function bindCustomerOverview() {
       startBtn.disabled = running;
       stopBtn.disabled = !running;
       $('#answers').innerHTML = options
-        ? options.map(([v, label]) => `<button class="btn" data-answer="${e(v)}">${e(label)}</button>`).join('')
-        : '<span class="muted">The answer buttons appear while the face is listening.</span>';
+        ? options.map(([v, label]) => `<button class="dbtn" data-answer="${e(v)}">${e(label)}</button>`).join('')
+        : '<span class="dos-hint">The answer buttons appear while the face is listening.</span>';
       $('#answers').querySelectorAll('[data-answer]').forEach((btn) => btn.addEventListener('click', () => S.checkIn.answer(btn.dataset.answer)));
     },
   });
   startBtn.addEventListener('click', () => { logAction('start_check_in', { humanoid: selected()?.label }); S.checkIn.start(); });
   stopBtn.addEventListener('click', () => S.checkIn.stop());
+}
+
+// Plot buttons and the request buttons inside the customer views (one listener for the whole page).
+function bindCustomerClicks() {
+  $('#main').addEventListener('click', (ev) => {
+    const plot = ev.target.closest('[data-plot]');
+    if (plot) {
+      const key = plot.dataset.plot;
+      if (S.plots.has(key)) S.plots.delete(key); else { S.plots.add(key); logAction('show_plot', { plot: key }); }
+      const h = selected();
+      const el = $(`#plot-${key}`);
+      if (el && h) el.outerHTML = plotBlock(key, h);
+      return;
+    }
+    const v = ev.target.closest('.dbox [data-view]');
+    if (v) go(v.dataset.view);
+  });
 }
 
 function bindHumanoidSelect() {
@@ -791,7 +970,11 @@ async function bindAudit() {
 function renderView() {
   const main = $('#main');
   const v = S.view;
-  if (v === 'overview') { main.innerHTML = customerOverview(); bindCustomerOverview(); return; }
+  if (!isAdmin()) {
+    const page = { overview: customerOverview, face: conversation() ? customerFace : null, environment: conversation() ? null : customerEnvironment,
+      activity: customerActivity, demo: conversation() ? customerDemo : null }[v];
+    if (page) { main.innerHTML = page(); bindCustomerOverview(); return; }
+  }
   if (v === 'fleet') { main.innerHTML = logisticsOverview(); bindLogisticsOverview(); return; }
   if (v === 'parts' && isAdmin()) { main.innerHTML = partsView(); bindSubview(); return; }
   if (v === 'reliability' && isAdmin() && selected()) { main.innerHTML = reliabilityView(); bindSubview(); return; }
@@ -812,15 +995,17 @@ function bindSubview() {
 }
 
 // Updates the live parts of the overview without rebuilding forms or the face.
+const LIVE_VIEWS = ['overview', 'fleet', 'face', 'environment', 'activity', 'demo'];
 function refreshLive() {
-  if (S.view !== 'overview' && S.view !== 'fleet') return;
+  if (!LIVE_VIEWS.includes(S.view)) return;
   const h = selected();
   const list = eventsFor(h?.id);
   const t = $('#events-today'); if (t) t.textContent = String(countToday(list));
   const ta = $('#events-today-all'); if (ta) ta.textContent = String(countToday(S.events));
   const inc = $('#incidents'); if (inc && h) inc.textContent = String(incidents30(h));
-  const log = $('#robot-log'); if (log && h) log.outerHTML = robotLog(h, { gateway: isAdmin() });
-  const ch = $('#events-chart-wrap'); if (ch) ch.innerHTML = eventsChart(list);
+  const log = $('#robot-log');
+  if (log && h) log.outerHTML = robotLog(h, { gateway: isAdmin(), limit: !isAdmin() && S.view !== 'activity' ? 40 : 120 });
+  const ch = $('#events-chart-wrap'); if (ch) ch.innerHTML = isAdmin() ? eventsChart(list) : eventsChartPlain(list);
 }
 
 // ---------------------------------------------------------------- boot
@@ -850,7 +1035,7 @@ async function boot() {
   tick();
   const fleetTick = () => later(async () => {
     try { await loadFleet(); } catch { /* keep the old list */ }
-    if (S.view === 'overview' || S.view === 'fleet') refreshLive();
+    refreshLive();
     fleetTick();
   }, CONFIG.fleetRefreshMs);
   fleetTick();

@@ -231,7 +231,29 @@ async def north_and_admin(browser):
     check('d1e3f5a7-9b2c-4d6e-8f0a-2c4e6a8b0d95' in await nc.text_content('.dash-main'), 'nc: linked demo patient UUID')
     check(await nc.locator('#robot-log tbody tr').count() >= 3, 'nc: seeded events in the robot log')
     check('Self test passed' in await nc.text_content('#robot-log'), 'nc: event names shown')
-    await nc.screenshot(path=f'{SHOTS}/nc_overview.png', full_page=True)
+    # console layout: tabs, robot picture top right, plots hidden until asked, one screen without scrolling
+    tabs = await nc.eval_on_selector_all('.dos-tabs [role=tab]', 'els => els.map(e => e.textContent)')
+    check(tabs == ['F1Overview', 'F2Virtual face', 'F3Activity & log', 'F4Demo events'], f'nc: tabs {tabs}')
+    rb = await nc.locator('.robot-box').bounding_box()
+    check(rb['x'] > 1000 and rb['y'] < 200, f'nc: robot picture top right ({rb["x"]:.0f}, {rb["y"]:.0f})')
+    check(await nc.locator('#plot-hour .plot-off').count() == 1 and await nc.locator('#events-chart-wrap').count() == 0, 'nc: plot hidden at first')
+    await nc.click('[data-plot="hour"]')
+    await nc.wait_for_selector('#events-chart-wrap svg')
+    check(True, 'nc: Show plot reveals the chart')
+    async def fits(page, what):
+        r = await page.evaluate('''() => { const m = document.querySelector('.dash-main');
+          return [document.scrollingElement.scrollHeight, innerHeight, m.scrollHeight, m.clientHeight]; }''')
+        check(r[0] <= r[1] and r[2] <= r[3] + 1, f'{what}: fits the screen without scrolling {r}')
+    await fits(nc, 'nc overview')
+    await nc.screenshot(path=f'{SHOTS}/nc_overview.png')
+    for key, view in [('F2', 'face'), ('F3', 'activity'), ('F4', 'demo')]:
+        await nc.keyboard.press(key)
+        await expect(nc.locator(f'.dos-tabs [data-view="{view}"]')).to_have_attribute('aria-selected', 'true')
+        await fits(nc, f'nc {view}')
+        await nc.screenshot(path=f'{SHOTS}/nc_{view}.png')
+        if view == 'activity':
+            check(await nc.locator('#events-chart-wrap svg').count() == 1, 'nc: revealed plot stays open on the activity tab')
+    await nc.keyboard.press('F1')
 
     await sign_in(ad, 'admin@hg.com')
     await expect(ad.locator('.dash-top .title')).to_contain_text('Health Guardian Logistics Dashboard')
@@ -242,6 +264,7 @@ async def north_and_admin(browser):
 
     # check-in on the robotic face (real hg_events rows) -> North Clinic log and logistics log
     before = int(psql("select count(*) from public.hg_events;"))
+    await nc.click('.dos-tabs [data-view="face"]')
     await nc.click('#start-checkin')
     await nc.wait_for_selector('[data-answer="not_good"]', timeout=15000)
     check((await nc.text_content('#face-mode')) == 'Listening', 'face listens for the answer')
@@ -253,6 +276,7 @@ async def north_and_admin(browser):
     await expect(nc.locator('#face-mode')).to_have_text('Idling', timeout=30000)
     after = int(psql("select count(*) from public.hg_events;"))
     check(after - before == 5, f'check-in wrote 5 hg_events rows ({after - before})')
+    await nc.click('.dos-tabs [data-view="overview"]')
     await expect(nc.locator('#robot-log')).to_contain_text('Patient does not feel well', timeout=8000)
     await expect(nc.locator('#robot-log')).to_contain_text('Medication not taken', timeout=8000)
     check('Answer: Not good' in await nc.text_content('#robot-log'), 'nc: payload shows the answer')
@@ -260,11 +284,13 @@ async def north_and_admin(browser):
     check(True, f"nc: incident counter updated ({await nc.text_content('#incidents')})")
 
     # demo injection -> both dashboards via polling
+    await nc.click('.dos-tabs [data-view="demo"]')
     await nc.fill('#inject-note', 'Bathroom')
     await nc.click('[data-inject="128"]')
     await expect(nc.locator('#robot-log')).to_contain_text('Fall detected', timeout=8000)
-    await expect(nc.locator('#event-widget')).to_contain_text('Fall detected', timeout=8000)
     check('Room: ' not in await nc.text_content('#robot-log') and 'Note: Bathroom' in await nc.text_content('#robot-log'), 'nc: injected note shown')
+    await nc.click('.dos-tabs [data-view="overview"]')
+    await expect(nc.locator('#event-widget')).to_contain_text('Fall detected', timeout=8000)
     t0 = time.time()
     await expect(ad.locator('#event-widget')).to_contain_text('Fall detected', timeout=12000)
     check(True, f'admin sees the injected fall after {time.time() - t0:.1f} s')
@@ -328,13 +354,13 @@ async def north_and_admin(browser):
     check(status == 403, f'nc gets 403 for the audit log ({status})')
     nc.errors = [x for x in nc.errors if '403' not in x]   # the probe above is expected to fail
     # customer export has payloads
-    await nc.click('[data-view="export"]')
+    await nc.click('.dos-menu [data-view="export"]')
     async with nc.expect_download() as dl:
         await nc.click('#export-form button[type=submit]')
     csv = open(await (await dl.value).path(), encoding='utf-8-sig').read()
     check('Payload' in csv and 'Answer: Not good' in csv, 'customer export has payloads')
     # account details (the implemented form)
-    await nc.click('[data-view="account"]')
+    await nc.click('.dos-menu [data-view="account"]')
     await nc.fill('#acc-phone', 'call me; now')
     await nc.click('#account-form button[type=submit]')
     check('digits' in await nc.text_content('#acc-msg'), 'account: invalid phone refused')
@@ -343,8 +369,8 @@ async def north_and_admin(browser):
     await nc.click('#account-form button[type=submit]')
     await expect(nc.locator('#acc-msg')).to_have_text('Saved.')
     check(psql("select display_name from public.hg_members m join auth.users u on u.id = m.user_id where u.email = 'nc@hg.com';") == 'Ward 3 nurse station', 'account saved in the database')
-    check('Ward 3 nurse station' in await nc.text_content('#side'), 'account name in the side bar')
-    await nc.screenshot(path=f'{SHOTS}/nc_account.png', full_page=True)
+    check('Ward 3 nurse station' in await nc.text_content('#who'), 'account name in the menu bar')
+    await nc.screenshot(path=f'{SHOTS}/nc_account.png')
     # sign out
     await nc.click('#sign-out')
     await nc.wait_for_url('**/login.html')
@@ -364,14 +390,22 @@ async def central(browser):
     check('Fall detection' in await cc.text_content('.dash-main h1'), 'cc: fall detection use case')
     check(await cc.locator('#humanoid-select option').count() == 4, 'cc: 4 humanoids')
     check(await cc.locator('[data-inject]').count() == 0 and await cc.locator('#face').count() == 0, 'cc: no live controls')
+    tabs = await cc.eval_on_selector_all('.dos-tabs [role=tab]', 'els => els.map(e => e.textContent)')
+    check(tabs == ['F1Overview', 'F2Environment', 'F3Activity & log'], f'cc: tabs {tabs}')
+    await cc.click('.dos-tabs [data-view="environment"]')
     check('Environmental data' in await cc.text_content('.dash-main') and 'Friendly reminders' in await cc.text_content('.dash-main'), 'cc: environment and reminders')
+    check(await cc.locator('#plot-temp .plot-off').count() == 1, 'cc: temperature plot hidden at first')
+    await cc.click('[data-plot="temp"]')
+    await cc.wait_for_selector('#temp-chart-wrap svg')
+    await cc.screenshot(path=f'{SHOTS}/cc_environment.png')
+    await cc.click('.dos-tabs [data-view="overview"]')
     rows = await cc.locator('#robot-log tbody tr').count()
     check(rows >= 8, f'cc: simulated history in the robot log ({rows})')
     await cc.select_option('#humanoid-select', '9e3a7b5c-4f0d-4a6b-8c84-1d3a2b5e7f44')
     await cc.wait_for_selector('.led.red.on')
     check('Critical' in await cc.text_content('#overview-card'), 'cc: red integrity on Humanoid OEM D UUID')
     check('OEM D variant A' in await cc.text_content('.dash-main'), 'cc: model shown')
-    await cc.screenshot(path=f'{SHOTS}/cc_overview.png', full_page=True)
+    await cc.screenshot(path=f'{SHOTS}/cc_overview.png')
     # a live simulated event arrives within ~16 s
     before = await cc.text_content('#event-widget')
     await cc.wait_for_function('(b) => document.querySelector("#event-widget").textContent !== b', arg=before, timeout=20000)
