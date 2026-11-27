@@ -5,9 +5,10 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('a0000000-0000-0000-0000-0000000000c2', 'nc@hg.com',      '{}'),
   ('a0000000-0000-0000-0000-0000000000a1', 'admin@hg.com',   '{}'),
   ('a0000000-0000-0000-0000-0000000000f1', 'stranger@example.org', '{}'),
-  ('a0000000-0000-0000-0000-0000000000b1', 'banned@hg.com',  '{}');
+  ('a0000000-0000-0000-0000-0000000000b1', 'banned@hg.com',  '{}'),
+  ('a0000000-0000-0000-0000-0000000000d1', 'jury@hg.com',    '{}');
 
-select test.assert((select public.hg_link_demo_accounts()) = '{"cc@hg.com": true, "nc@hg.com": true, "admin@hg.com": true}'::jsonb,
+select test.assert((select public.hg_link_demo_accounts()) = '{"cc@hg.com": true, "nc@hg.com": true, "admin@hg.com": true, "jury@hg.com": true}'::jsonb,
                    'demo accounts linked');
 insert into public.hg_members (user_id, hg_role, customer_id) values ('a0000000-0000-0000-0000-0000000000b1', 'user', 'north-clinic');
 update public.profiles set status = 'banned' where id = 'a0000000-0000-0000-0000-0000000000b1';
@@ -138,6 +139,26 @@ select test.assert((select x ->> 'email' from jsonb_array_elements(public.hg_aud
                    'audit log names the account');
 select test.assert(public.hg_inject_event('3f6c2a1e-8b4d-4c2a-9e51-7a0d2c4b6e11', 0) ? 'event_id', 'admin may inject anywhere');
 reset role;
+
+-- -------------------------------------------------------------- jury: North Clinic dashboard, read-only
+select test.login('a0000000-0000-0000-0000-0000000000d1');
+set role authenticated;
+select test.assert((public.hg_whoami() ->> 'read_only')::boolean, 'jury: read-only');
+select test.assert(public.hg_whoami() -> 'customer' ->> 'name' = 'North Clinic', 'jury: North Clinic');
+select test.assert(jsonb_array_length(public.hg_fleet()) = 3, 'jury sees the 3 North Clinic humanoids');
+select test.assert((select count(*) from public.hg_feed(now() - interval '1 minute')) >= 4, 'jury sees the live events');
+select test.expect_error($$select public.hg_inject_event('b2d4f6a8-0c1e-4f3a-9b5d-7e9f1a3c5e55', 128)$$, 'hg_read_only');
+select test.expect_error($$select public.hg_update_account('x', '1')$$, 'hg_read_only');
+select test.expect_error($$insert into public.hg_events (session_id, event_type) values ('cccccccc-0000-0000-0000-000000000001', 'session_started')$$, 'row-level security');
+select test.expect_error($$select public.hg_audit()$$, 'hg_access_denied');
+reset role;
+select test.assert((select count(*) from public.hg_audit_log where email = 'jury@hg.com') = 0, 'jury: nothing written before');
+select test.login('a0000000-0000-0000-0000-0000000000d1');
+set role authenticated;
+select public.hg_log_action('open_view', '{"view":"overview"}');
+reset role;
+select test.assert((select count(*) from public.hg_audit_log where email = 'jury@hg.com') = 0, 'jury: audit calls write nothing');
+select test.assert((select read_only from public.hg_members where user_id = 'a0000000-0000-0000-0000-0000000000c2') = false, 'nc is not read-only');
 
 -- -------------------------------------------------------------- rate limits
 select test.login('a0000000-0000-0000-0000-0000000000c2');

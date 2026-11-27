@@ -72,6 +72,7 @@ export function renderFooter(el) {
         <li><a href="cookies.html">Cookies and stored data</a></li>
         <li><a href="privacy.html#contact">Personal data contact</a></li>
       </ul></div>
+      <a class="built-at" href="index.html#main"><span>Built at</span><img src="assets/img/compact-lockup-light.png" alt="RobotHack" width="120" height="45"></a>
       <p class="legal">&copy; <span data-year></span> HG Group. Demonstration website: customers, humanoids and events are fictitious. Powered by HG Group.</p>
     </div>`;
   el.querySelector('[data-year]').textContent = String(new Date().getFullYear());

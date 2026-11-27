@@ -59,7 +59,8 @@ Demo injection buttons (North Clinic) ──────► public.hg_robot_even
 ## Set up (once)
 
 1. **Accounts.** In the production Supabase project (the one in `assets/js/config.js`, same as the app):
-   Authentication → Users → Add user → Create new user, three times: `cc@hg.com`, `nc@hg.com`, `admin@hg.com`, each
+   Authentication → Users → Add user → Create new user for `cc@hg.com`, `nc@hg.com`, `admin@hg.com` and `jury@hg.com`
+   (read-only North Clinic view for the RobotHack jury: no account form, no demo injection, no check-in, nothing written), each
    with the agreed demo password and **Auto Confirm User** ticked. No metadata is needed.
 2. **Database.** SQL Editor → New query → paste [`db/hg_dashboards.sql`](db/hg_dashboards.sql) → Run. It first
    creates `hg_events` (the app's event log) if it is missing, then the dashboards in one transaction; it can be run

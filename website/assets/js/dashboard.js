@@ -39,21 +39,31 @@ const S = {
 };
 
 const isAdmin = () => S.me?.role === 'admin';
+const readOnly = () => S.me?.read_only === true;      // jury account: look only
 const customer = () => S.me?.customer || null;
 const selected = () => S.fleet.find((h) => h.id === S.selectedId) || null;
 
 // ---------------------------------------------------------------- views per role
 // customer dashboard: tabs (F1-F4) and the menu in the top bar
 const conversation = () => customer()?.use_case === 'conversation_support';
-const TABS_USER = () => (conversation()
-  ? [['overview', 'Overview'], ['face', 'Virtual face'], ['activity', 'Activity & log'], ['demo', 'Demo events']]
-  : [['overview', 'Overview'], ['environment', 'Environment'], ['activity', 'Activity & log']]);
-const MENU_USER = [
+const TABS_USER = () => {
+  if (!conversation()) return [['overview', 'Overview'], ['environment', 'Environment'], ['activity', 'Activity & log']];
+  const tabs = [['overview', 'Overview'], ['face', 'Virtual face'], ['activity', 'Activity & log']];
+  return readOnly() ? tabs : [...tabs, ['demo', 'Demo events']];
+};
+const MENU_USER = () => (readOnly() ? [['export', 'Export']] : [
   ['account', 'Account'],
   ['extension', 'Rental extension'],
   ['ticket', 'Support ticket'],
   ['export', 'Export'],
-];
+]);
+// logistics dashboard: the same console layout
+const TABS_ADMIN = [['fleet', 'Fleet'], ['humanoid', 'Humanoid'], ['reliability', 'Reliability & parts'], ['warehouse', 'Warehouse'], ['audit', 'Audit log']];
+const MENU_ADMIN = [['deploy', 'Deploy'], ['maintenance', 'Maintenance'], ['ticket', 'Support ticket'], ['export', 'Export'], ['account', 'Account']];
+const TABS = () => (isAdmin() ? TABS_ADMIN : TABS_USER());
+const MENU = () => (isAdmin() ? MENU_ADMIN : MENU_USER());
+// views that fill exactly one screen (no page scrolling)
+const FIT_VIEWS = ['overview', 'face', 'environment', 'activity', 'demo', 'fleet', 'humanoid', 'reliability', 'warehouse', 'audit'];
 const VIEWS_USER = [['overview', 'Overview'], ['face', 'Virtual face'], ['environment', 'Environment'], ['activity', 'Activity & log'],
   ['demo', 'Demo events'], ['account', 'Account details'], ['extension', 'Request rental period extension'],
   ['ticket', 'Create a support ticket'], ['export', 'Export events to Excel']];
@@ -71,6 +81,7 @@ const views = () => (isAdmin() ? VIEWS_ADMIN : VIEWS_USER);
 
 // ---------------------------------------------------------------- helpers
 function logAction(action, details = {}) {
+  if (readOnly()) return;                       // the jury account writes nothing
   api.rpc('hg_log_action', { p_action: action, p_details: details }).catch(() => { /* never block the UI */ });
 }
 
@@ -178,7 +189,7 @@ function startSimulation() {
 
 // ---------------------------------------------------------------- shell
 function renderTop() {
-  if (!isAdmin()) { renderTopUser(); return; }
+  renderTopDos(); return;
   const c = customer();
   const initials = c ? c.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() : 'HG';
   $('#top').innerHTML = `
@@ -198,23 +209,30 @@ function renderTop() {
 }
 
 // Customer dashboard (console style): one-line menu bar, F1-F4 tabs, status bar at the bottom.
-function renderTopUser() {
+const roleLabel = () => (isAdmin() ? 'Admin' : readOnly() ? 'Read-only' : 'User');
+
+function renderTopDos() {
   const c = customer();
   document.body.classList.add('dos');
+  document.body.classList.toggle('dos-readonly', readOnly());
   $('#side').hidden = true;
+  const brand = isAdmin() ? 'LOGISTICS' : c.name.toUpperCase();
+  const sub = isAdmin() ? 'HG Group · availability and logistics' : `${humanize(c.unique_id)} · ${humanize(c.use_case)}`;
   $('#top').innerHTML = `
     <div class="dos-bar">
-      <span class="dos-brand">HEALTH GUARDIANS ▸ ${e(c.name.toUpperCase())}</span>
-      <span class="title sr-only">${e(c.name)} dashboard</span>
-      <span class="dos-sub">${e(humanize(c.unique_id))} · ${e(humanize(c.use_case))}</span>
+      <span class="dos-brand">HEALTH GUARDIANS ▸ ${e(brand)}</span>
+      <span class="title sr-only">${isAdmin() ? 'Health Guardian Logistics Dashboard' : `${e(c.name)} dashboard`}</span>
+      ${readOnly() ? '<span class="dos-ro-pill">RESTRICTED VIEW · JURY</span>' : `<span class="dos-sub">${e(sub)}</span>`}
       <span class="dos-sp"></span>
       <span id="sync"></span>
-      <span id="who">${e(S.me.display_name || S.me.email)} · User</span>
-      <nav class="dos-menu" aria-label="Account and requests">${MENU_USER.map(([id, t]) =>
+      <span id="who">${e(S.me.display_name || S.me.email)} · ${roleLabel()}</span>
+      <nav class="dos-menu" aria-label="Account and requests">${MENU().map(([id, t]) =>
         `<button data-view="${id}">${e(t)}</button>`).join('')}<a href="index.html">Website</a><button id="sign-out">Sign out</button></nav>
     </div>
-    <div class="dos-tabs" role="tablist" aria-label="Dashboard">${TABS_USER().map(([id, t], i) =>
-      `<button role="tab" data-view="${id}" aria-selected="false"><b>F${i + 1}</b>${e(t)}</button>`).join('')}</div>`;
+    <div class="dos-tabs" role="tablist" aria-label="Dashboard">${TABS().map(([id, t], i) =>
+      `<button role="tab" data-view="${id}" aria-selected="false"><b>F${i + 1}</b>${e(t)}</button>`).join('')}</div>
+    ${readOnly() ? `<div class="dos-jury" role="note" id="jury-note"><b>RESTRICTED VIEW FOR THE JURY</b>
+      Read-only: you see the live North Clinic dashboard of Roha2212; nothing here can change data.</div>` : ''}`;
   $('#top').querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => go(b.dataset.view)));
   $('#sign-out').addEventListener('click', signOut);
   bindCustomerClicks();
@@ -224,7 +242,7 @@ function renderTopUser() {
   document.body.append(bar);
   document.addEventListener('keydown', (ev) => {
     const n = /^F([1-9])$/.exec(ev.key);
-    const tab = n && TABS_USER()[Number(n[1]) - 1];
+    const tab = n && TABS()[Number(n[1]) - 1];
     if (!tab || ev.altKey || ev.ctrlKey || ev.metaKey) return;
     ev.preventDefault();
     go(tab[0]);
@@ -236,18 +254,19 @@ function markTabs() {
   $('#top').querySelectorAll('[role="tab"]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === S.view)));
   $('#top').querySelectorAll('.dos-menu [data-view]').forEach((b) => b.toggleAttribute('aria-current', b.dataset.view === S.view));
   const who = $('#who');
-  if (who) who.textContent = `${S.me.display_name || S.me.email} · User`;
+  if (who) who.textContent = `${S.me.display_name || S.me.email} · ${roleLabel()}`;
   const bar = $('#dos-status');
   if (bar) {
-    bar.innerHTML = `${TABS_USER().map(([id, t], i) => `<span><b>F${i + 1}</b>${e(t)}</span>`).join('')}<span class="dos-sp"></span>
-      <span>${customer()?.simulated ? 'Simulated events (demo)' : 'Live database events'}</span>`;
+    const note = isAdmin() ? 'All actions are written to the audit log' : readOnly() ? 'Read-only jury view'
+      : customer()?.simulated ? 'Simulated events (demo)' : 'Live database events';
+    bar.innerHTML = `${TABS().map(([id, t], i) => `<span><b>F${i + 1}</b>${e(t)}</span>`).join('')}<span class="dos-sp"></span><span>${e(note)}</span>`;
   }
 }
 
 function renderSync() {
   const el = $('#sync');
   if (!el) return;
-  if (!isAdmin()) {
+  if (document.body.classList.contains('dos')) {
     el.innerHTML = S.syncOk ? `<span class="sync-dot"></span>LIVE${S.lastSync ? ` ${fmtTime(S.lastSync)}` : ''}`
       : '<span class="sync-dot off"></span>OFFLINE, retrying';
     el.title = `Polling every ${CONFIG.pollMs / 1000} s`;
@@ -259,7 +278,7 @@ function renderSync() {
 }
 
 function renderSide() {
-  if (!isAdmin()) { markTabs(); return; }
+  markTabs(); return;
   const head = isAdmin()
     ? `<div class="side-head"><p class="kicker">HG Group</p><b>${e(S.me.display_name || S.me.email)}</b><br><span class="chip purple" style="margin-top:6px">Admin</span></div>`
     : `<div class="side-head"><p class="kicker">${e(customer().name)}</p><b>${e(S.me.display_name || S.me.email)}</b><br><span class="chip mint" style="margin-top:6px">User</span></div>`;
@@ -280,7 +299,7 @@ function go(view, { log = true } = {}) {
   S.view = view;
   renderSide();
   renderView();
-  $('#main').classList.toggle('dos-fit', !isAdmin() && ['overview', 'face', 'environment', 'activity', 'demo'].includes(view));
+  $('#main').classList.toggle('dos-fit', FIT_VIEWS.includes(view));
   if (log) logAction('open_view', { view });
   $('#main').focus({ preventScroll: true });
   window.scrollTo(0, 0);
@@ -296,16 +315,6 @@ async function signOut() {
 }
 
 // ---------------------------------------------------------------- shared panels
-function selectHumanoidCard(list) {
-  return `<div class="card">
-    <label for="humanoid-select">Search humanoid</label>
-    <select id="humanoid-select">${list.map((h) =>
-      `<option value="${e(h.id)}" ${h.id === S.selectedId ? 'selected' : ''}>${e(humanize(h.label))} · ${e(humanize(h.model_id))}${
-        isAdmin() ? ` · ${e(h.customer_name || humanize(h.instance_status))}` : ''}${h.live ? ' · live' : ''}</option>`).join('')}</select>
-    <p class="hint mono">${e(selected()?.id || '')}</p>
-  </div>`;
-}
-
 function eventWidget() {
   const ev = S.latest;
   return `<div class="card event-widget ${ev ? `t-${e(ev.type)}` : ''}" id="event-widget" aria-live="polite">
@@ -336,49 +345,19 @@ function leds(flag) {
     <b>${e(flagText(flag))}</b></div>`;
 }
 
-function capabilities(h) {
-  return `<div class="card"><h3>Robot capabilities</h3><ul class="feature-list">${FEATURES.map((f) => {
-    const on = (h.features || []).includes(f);
-    return `<li class="${on ? '' : 'off'}">${e(humanize(f))}<span class="chip ${on ? 'green' : 'grey'}">${on ? 'Available' : 'Not available'}</span></li>`;
-  }).join('')}</ul></div>`;
-}
-
-function overviewTable(h) {
-  const statusChip = { deployed: 'green', in_stock: 'blue', maintenance: 'yellow', in_transit: 'purple' }[h.instance_status] || 'grey';
-  const testChip = { passed: 'green', passed_with_warnings: 'yellow', failed: 'red' }[h.system_test] || 'grey';
-  return `<div class="card" id="overview-card"><h3>General overview · ${e(humanize(h.label))}</h3>
-    <table class="kv">
-      <tr><th>Number of incidents (30 days)</th><td><b id="incidents">${incidents30(h)}</b></td></tr>
-      <tr><th>Humanoid state</th><td><span class="chip ${statusChip}">${e(humanize(h.instance_status))}</span></td></tr>
-      <tr><th>Battery autonomy</th><td>${fmtHours(h.battery_autonomy_h)}</td></tr>
-      <tr><th>System test report</th><td><span class="chip ${testChip}">${e(humanize(h.system_test))}</span> on ${fmtDate(h.system_test_on)}</td></tr>
-      ${isAdmin() ? '' : `<tr><th>Scheduled maintenance</th><td>${fmtDate(h.next_maintenance)}</td></tr>`}
-      <tr><th>Integrity flags</th><td>${leds(h.integrity_flag)}</td></tr>
-    </table></div>`;
-}
-
 function robotLog(h, { gateway = false, limit = 120 } = {}) {
   const list = eventsFor(h?.id).slice(0, limit);
   const rows = list.map((ev) => `<tr>
       <td>${fmtDate(ev.created_at)}</td><td>${fmtTime(ev.created_at)}</td><td class="mono">${ev.code}</td>
       <td class="type"><span class="chip ${typeClass(ev.type)}">${e(humanize(ev.type))}</span></td>
       <td>${e(ev.name)}</td>${gateway ? `<td>${e(humanize(ev.source))}</td>` : `<td>${e(payloadText(ev.payload)) || '<span class="muted">-</span>'}</td>`}</tr>`).join('');
-  const head = isAdmin() ? `<h3 style="margin-top:4px">${gateway ? 'Robot log: requests sent through our gateway' : 'Robot log'}</h3>` : '';
-  return `<div id="robot-log">${head}
+  return `<div id="robot-log">
     <div class="table-scroll"><table class="brut log-table">
       <thead><tr><th>Date</th><th>Time</th><th>Code</th><th>Type</th><th>Event</th><th>${gateway ? 'Source' : 'Payload'}</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="6" class="empty">No events in the last 24 hours</td></tr>`}</tbody>
     </table></div></div>`;
 }
 
-function eventsChart(list) {
-  return `<div class="card chart" id="events-chart"><h3>Events per hour (last 24 hours)</h3>
-    ${barChart(eventsPerHour(list), { title: 'Events per hour' })}
-    <div class="legend"><span><i style="background:#1dbf73"></i>Keep alive only</span><span><i style="background:#f2545b"></i>Hour with alerts</span></div></div>`;
-}
-
-// ---------------------------------------------------------------- customer dashboard (console style)
-// One screen per tab, no page scrolling: boxes in a 3-column grid, the robot picture always top right.
 function box(title, body, { cls = '', id = '' } = {}) {
   return `<section class="dbox ${cls}"${id ? ` id="${id}"` : ''}><h3>${title}</h3><div class="dbox-body">${body}</div></section>`;
 }
@@ -395,7 +374,7 @@ function chipFor(kind, value) {
 function humanoidSelect() {
   return `<label class="sr-only" for="humanoid-select">Humanoid</label>
     <select id="humanoid-select">${S.fleet.map((h) =>
-      `<option value="${e(h.id)}" ${h.id === S.selectedId ? 'selected' : ''}>${e(humanize(h.label))} · ${e(humanize(h.model_id))}${h.live ? ' · live' : ''}</option>`).join('')}</select>`;
+      `<option value="${e(h.id)}" ${h.id === S.selectedId ? 'selected' : ''}>${e(humanize(h.label))} · ${e(humanize(h.model_id))}${isAdmin() ? ` · ${e(h.customer_name || humanize(h.instance_status))}` : ''}${h.live ? ' · live' : ''}</option>`).join('')}</select>`;
 }
 
 function robotPicture(h, { line = false } = {}) {
@@ -452,6 +431,7 @@ function tempChart(h) {
 const PLOTS = {
   hour: { title: 'Events per hour · last 24 h', render: (h) => eventsChartPlain(eventsFor(h.id)), wrap: 'events-chart-wrap' },
   temp: { title: 'Room temperature · last 24 h', render: (h) => tempChart(h), wrap: 'temp-chart-wrap' },
+  rel: { title: 'Simulated system reliability', render: (h) => reliabilityChart(h), wrap: 'rel-chart-wrap' },
 };
 
 function plotBlock(key, h) {
@@ -478,7 +458,7 @@ function supportBody() {
     <tr><th>Powered by</th><td>HG Group</td></tr>
     <tr><th>E-mail</th><td style="font-size:11.5px">support@healthguardians.example</td></tr>
   </table>
-  <div class="dos-actions"><button class="dbtn" data-view="extension">Rental extension</button><button class="dbtn" data-view="ticket">Support ticket</button></div>`;
+  ${readOnly() ? '<p class="dos-ro">Read-only jury view</p>' : '<div class="dos-actions"><button class="dbtn" data-view="extension">Rental extension</button><button class="dbtn" data-view="ticket">Support ticket</button></div>'}`;
 }
 
 function noHumanoid() {
@@ -512,7 +492,10 @@ function customerFace() {
         <div class="face-caption" id="face-caption">Press "Start check-in" to talk to the patient.</div></div>`, { cls: 'span2 rows3 face-box' })
     : box('Robotic virtual face', `<p>The check-in of ${e(humanize(h.label))} runs on the humanoid itself; its events appear in the log.</p>
         ${live ? `<p>The live demo humanoid is <b>${e(humanize(live.label))}</b>. Select it to run the check-in here.</p>` : ''}`, { cls: 'span2 rows3' });
-  const control = box('Check-in', `${humanoidSelect()}
+  const control = readOnly()
+    ? box('Check-in', `${humanoidSelect()}<p class="dos-ro">Read-only jury view: the check-in is disabled here.</p>
+      <p class="dos-hint">The face on Roha2212 runs the same conversation; its events appear live in F1 Overview and F3 Activity &amp; log.</p>`, { cls: 'grow' })
+    : box('Check-in', `${humanoidSelect()}
       ${h.live ? `<label class="dos-check"><input type="checkbox" id="voice" ${S.speech ? 'checked' : ''}> Voice</label>
       <div class="dos-actions"><button class="dbtn primary" id="start-checkin">Start check-in</button><button class="dbtn" id="stop-checkin" disabled>Stop</button></div>
       <p class="dos-label">Patient answer</p>
@@ -589,6 +572,7 @@ function bindCustomerOverview() {
   S.face = createFace(canvas, { reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('a11y-motion') });
   const startBtn = $('#start-checkin');
   const stopBtn = $('#stop-checkin');
+  if (!startBtn) return;                        // read-only jury view: the face only idles
   $('#voice').addEventListener('change', (ev) => { S.speech = ev.target.checked; });
   S.checkIn = createCheckIn({
     speak: (text) => (S.speech ? browserSpeak(text) : null),
@@ -647,53 +631,59 @@ function bindHumanoidSelect() {
   });
 }
 
-// ---------------------------------------------------------------- logistics overview
+// ---------------------------------------------------------------- logistics dashboard (console style)
+function adminFacts(h) {
+  return `<table class="dkv">
+    <tr><th>In stock (same model)</th><td><b>${h.in_stock_same_model ?? 0}</b></td></tr>
+    <tr><th>Currently deployed</th><td>${e(h.customer_name || 'Not deployed')}</td></tr>
+    <tr><th>Operating time</th><td>${fmtHours(h.operating_hours)}</td></tr>
+    <tr><th>Estimated time to failure</th><td>${fmtHours(h.time_to_failure_h)}</td></tr>
+    <tr><th>OEM ID</th><td class="mono">${e(h.oem_id)}</td></tr>
+    <tr><th>Humanoid UUID</th><td class="mono">${e(h.id)}</td></tr>
+  </table>`;
+}
+
+function fleetMatrix() {
+  const groups = S.tab === 'customer' ? groupByCustomer() : groupByOem();
+  return `<div class="dos-seg" role="tablist" aria-label="Fleet view">
+      <button role="tab" data-tab="customer" aria-selected="${S.tab === 'customer'}">By customer</button>
+      <button role="tab" data-tab="oem" aria-selected="${S.tab === 'oem'}">By OEM</button>
+      <span class="dos-hint">${S.fleet.length} humanoids · ${S.fleet.filter((x) => x.instance_status === 'deployed').length} deployed · click one to inspect it</span></div>
+    <div class="matrix dos-matrix">${groups.map(([title, sub, units]) => `
+      <div class="group"><h3>${e(title)} <span class="chip grey">${units.length}</span></h3><p class="dos-hint">${e(sub)}</p>
+        ${units.map((u) => `<button class="unit" data-unit="${e(u.id)}" aria-pressed="${u.id === S.selectedId}">
+          <span class="mini-led ${e(u.integrity_flag)}" aria-hidden="true"></span>
+          <span class="unit-name">${e(humanize(u.label))}<small>${e(humanize(S.tab === 'customer' ? u.model_id : (u.customer_name || u.instance_status)))}</small></span>
+          ${chipFor('state', u.instance_status)}</button>`).join('')}
+      </div>`).join('')}</div>`;
+}
+
 function logisticsOverview() {
   const h = selected();
-  const groups = S.tab === 'customer' ? groupByCustomer() : groupByOem();
-  return `
-    <p class="kicker">Availability and logistics</p>
-    <h1>Fleet overview</h1>
-    <div class="dash-grid" style="margin-top:18px">
-      <div class="span-8 stack">
-        ${selectHumanoidCard(S.fleet)}
-        ${eventWidget()}
-        <div class="row"><div class="tabs" role="tablist" aria-label="Fleet view">
-          <button role="tab" data-tab="customer" aria-selected="${S.tab === 'customer'}">Fleet by customer</button>
-          <button role="tab" data-tab="oem" aria-selected="${S.tab === 'oem'}">Fleet by OEM</button></div>
-          <span class="spacer"></span><span class="muted">${S.fleet.length} humanoids · ${S.fleet.filter((x) => x.instance_status === 'deployed').length} deployed</span></div>
-        <div class="matrix" role="tabpanel">${groups.map(([title, sub, units]) => `
-          <div class="card group"><h3>${e(title)} <span class="chip">${units.length}</span></h3><p class="muted" style="margin:0">${e(sub)}</p>
-            ${units.map((u) => `<button class="unit" data-unit="${e(u.id)}" aria-pressed="${u.id === S.selectedId}">
-              <span class="mini-led ${e(u.integrity_flag)}" aria-hidden="true"></span>
-              <span style="flex:1">${e(humanize(u.label))}<br><span class="muted" style="font-weight:600;font-size:.85rem">${e(humanize(S.tab === 'customer' ? u.model_id : (u.customer_name || u.instance_status)))}</span></span>
-              <span class="chip ${u.instance_status === 'deployed' ? 'green' : 'blue'}" style="font-size:.7rem">${e(humanize(u.instance_status))}</span></button>`).join('')}
-          </div>`).join('')}</div>
-        ${h ? `<h2 style="margin-top:28px">${e(humanize(h.label))}</h2>
-        ${overviewTable(h)}
-        <div class="dash-grid"><div class="span-5">${capabilities(h)}</div><div class="span-7" id="events-chart-wrap">${eventsChart(eventsFor(h.id))}</div></div>
-        <div class="card">${robotLog(h, { gateway: true })}</div>` : ''}
-      </div>
-      ${h ? `<aside class="span-4 stack">
-        <div class="card"><p class="kicker">${e(humanize(h.model_id))}</p><div class="robot-figure">${robotPicture(h)}</div>
-          <p class="hint">${PHOTOS[h.label] ? 'Photo of the live demo humanoid.' : 'Dummy picture; the model photo follows.'}</p></div>
-        <div class="card"><h3>Indicators system integrity</h3>${leds(h.integrity_flag)}</div>
-        <div class="card"><table class="kv">
-          <tr><th>In stock (same model)</th><td><b>${h.in_stock_same_model ?? 0}</b></td></tr>
-          <tr><th>Currently deployed</th><td>${e(h.customer_name || 'Not deployed')}</td></tr>
-          <tr><th>Operating time</th><td>${fmtHours(h.operating_hours)}</td></tr>
-          <tr><th>Estimated time to failure</th><td>${fmtHours(h.time_to_failure_h)}</td></tr>
-          <tr><th>OEM ID</th><td class="mono">${e(h.oem_id)}</td></tr>
-          <tr><th>Humanoid UUID</th><td class="mono" style="word-break:break-all">${e(h.id)}</td></tr>
-        </table></div>
-        <button class="btn" data-goto="parts">Components list <span class="arrow"></span></button>
-        <button class="btn" data-goto="reliability">Time to failure plot <span class="arrow"></span></button>
-        <div class="card"><h3>Humanoid history</h3>
-          <table class="brut"><thead><tr><th>Date</th><th>Maintenance</th><th>Replaced parts</th></tr></thead><tbody>
-          ${(h.history || []).map((x) => `<tr><td class="mono">${fmtDate(x.done_on)}</td><td>${e(x.action)}</td><td>${e(x.parts || '-')}</td></tr>`).join('')
-            || '<tr><td colspan="3" class="empty">No history</td></tr>'}</tbody></table></div>
-      </aside>` : ''}
-    </div>`;
+  return `<h1 class="sr-only">Fleet overview</h1><div class="dos-grid">
+    ${box('Fleet', fleetMatrix(), { cls: 'span2 rows3 grow' })}
+    ${h ? robotBox(h) : ''}
+    ${box('Latest event · any humanoid', `${eventWidget()}
+      <div class="dos-stats"><div><b class="big" id="events-today-all">${countToday(S.events)}</b><span>events today · fleet</span></div>
+        <div><b class="big">${S.fleet.filter((x) => x.integrity_flag === 'red').length}</b><span>critical integrity</span></div>
+        <div><b class="big">${S.fleet.filter((x) => x.instance_status === 'in_stock').length}</b><span>in stock</span></div></div>
+      ${h ? `<div class="dos-actions"><button class="dbtn primary" data-view="humanoid">Inspect ${e(humanize(h.label))} ▸ F2</button></div>` : ''}`, { cls: 'grow' })}
+  </div>`;
+}
+
+function logisticsHumanoid() {
+  const h = selected();
+  if (!h) return '<p class="notice">No humanoid selected.</p>';
+  return `<h1 class="sr-only">${e(humanize(h.label))}</h1><div class="dos-grid">
+    ${box('Humanoid', `${humanoidSelect()}${adminFacts(h)}`)}
+    ${box('General overview', overviewKv(h), { id: 'overview-card' })}
+    ${robotBox(h)}
+    ${box('Capabilities', capabilityList(h) + plotBlock('hour', h), { cls: 'rows23 grow' })}
+    ${box('Robot log · requests sent through our gateway', robotLog(h, { gateway: true }), { cls: 'rows23 grow' })}
+    ${box('Humanoid history', `<div class="table-scroll"><table class="brut"><thead><tr><th>Date</th><th>Maintenance</th><th>Parts</th></tr></thead><tbody>
+      ${(h.history || []).map((x) => `<tr><td class="mono">${fmtDate(x.done_on)}</td><td>${e(x.action)}</td><td>${e(x.parts || '-')}</td></tr>`).join('')
+        || '<tr><td colspan="3" class="empty">No history</td></tr>'}</tbody></table></div>`, { cls: 'grow' })}
+  </div>`;
 }
 
 function groupByCustomer() {
@@ -736,49 +726,42 @@ function bindLogisticsOverview() {
 }
 
 // ---------------------------------------------------------------- per-instance sub views (logistics)
-function partsView() {
-  const h = selected();
-  const parts = sparePartsFor(h?.oem_id);
-  return `<button class="btn small" data-goto="fleet">&larr; Back to the fleet</button>
-    <p class="kicker" style="margin-top:18px">${e(humanize(h?.label))} · ${e(humanize(h?.model_id))}</p>
-    <h1>Components list</h1>
-    <p class="notice warn">Mock-up: artificial parts list of ${e(humanize(h?.oem_id))}.</p>
-    <div class="table-scroll" style="max-height:none;margin-top:18px"><table class="brut">
-      <thead><tr><th>Spare part</th><th>Description</th><th>In stock</th><th>Status</th><th></th></tr></thead><tbody>
-      ${parts.map((p) => `<tr><td>${e(humanize(p.id))}</td><td>${e(p.description)}</td><td class="mono">${p.inStock}</td>
-        <td><span class="chip ${p.reorder ? 'yellow' : 'green'}">${p.reorder ? 'Reorder' : 'In stock'}</span></td>
-        <td><button class="btn small" data-mock="request_part" data-part="${e(p.id)}">Request part</button></td></tr>`).join('')}
-      </tbody></table></div><p id="mock-msg" role="status" style="margin-top:12px"></p>`;
+function reliabilityChart(h) {
+  const rel = reliability(h.operating_hours, h.time_to_failure_h);
+  return `<div class="chart">${lineChart({
+      title: 'Reliability over operating hours',
+      series: [{ name: 'Reliability', fill: '#a8e6c5', points: rel.series.map((p) => ({ x: p.t, y: p.r * 100 })) }],
+      yMin: 0, yMax: 100, height: 260,
+      hLines: [{ y: rel.threshold * 100, label: `Threshold ${Math.round(rel.threshold * 100)} %` }],
+      vLines: [{ x: rel.failAt, label: 'Estimated failure' }],
+      marks: [{ x: rel.current.t, y: rel.current.r * 100, label: 'Now' }],
+      xFormat: (t) => `${Math.round(t)} h`, yFormat: (v) => `${v} %`,
+    })}
+    <div class="legend"><span><i style="background:#a8e6c5"></i>Reliability R(t)</span><span><i style="background:#f2545b"></i>Threshold</span><span><i style="background:#ffd23f"></i>Current operating time</span></div></div>`;
 }
 
 function reliabilityView() {
   const h = selected();
+  if (!h) return '<p class="notice">No humanoid selected.</p>';
   const rel = reliability(h.operating_hours, h.time_to_failure_h);
-  return `<button class="btn small" data-goto="fleet">&larr; Back to the fleet</button>
-    <p class="kicker" style="margin-top:18px">${e(humanize(h.label))} · ${e(humanize(h.model_id))}</p>
-    <h1>Estimated time to failure</h1>
-    <div class="dash-grid" style="margin-top:18px">
-      <div class="card chart span-8"><h3>Simulated system reliability</h3>
-        ${lineChart({
-          title: 'Reliability over operating hours',
-          series: [{ name: 'Reliability', fill: '#a8e6c5', points: rel.series.map((p) => ({ x: p.t, y: p.r * 100 })) }],
-          yMin: 0, yMax: 100, height: 300,
-          hLines: [{ y: rel.threshold * 100, label: `Threshold ${Math.round(rel.threshold * 100)} %` }],
-          vLines: [{ x: rel.failAt, label: 'Estimated failure' }],
-          marks: [{ x: rel.current.t, y: rel.current.r * 100, label: 'Now' }],
-          xFormat: (t) => `${Math.round(t)} h`, yFormat: (v) => `${v} %`,
-        })}
-        <div class="legend"><span><i style="background:#a8e6c5"></i>Reliability R(t)</span><span><i style="background:#f2545b"></i>Threshold</span><span><i style="background:#ffd23f"></i>Current operating time</span></div>
-      </div>
-      <div class="card span-4"><table class="kv">
+  const parts = sparePartsFor(h.oem_id);
+  return `<h1 class="sr-only">Reliability and parts · ${e(humanize(h.label))}</h1><div class="dos-grid">
+    ${box('Estimated time to failure', `<table class="dkv">
         <tr><th>Operating time</th><td>${fmtHours(h.operating_hours)}</td></tr>
         <tr><th>Estimated time to failure</th><td>${fmtHours(h.time_to_failure_h)}</td></tr>
         <tr><th>Reliability now</th><td>${(rel.current.r * 100).toFixed(1)} %</td></tr>
-        <tr><th>Threshold</th><td>${Math.round(rel.threshold * 100)} %</td></tr>
-        <tr><th>Model</th><td>Weibull, shape ${rel.beta}, scale ${Math.round(rel.eta)} h</td></tr>
-      </table><p class="hint">Simulated: the curve is fitted so that it crosses the threshold when the estimated time to failure runs out, as components wear.</p>
-      ${leds(h.integrity_flag)}</div>
-    </div>`;
+        <tr><th>Model</th><td>Weibull, shape ${rel.beta}, scale ${Math.round(rel.eta)} h</td></tr></table>
+      ${plotBlock('rel', h)}`, { cls: 'span2' })}
+    ${robotBox(h)}
+    ${box(`Components list · ${e(humanize(h.oem_id))} (mock-up)`, `<div class="table-scroll"><table class="brut">
+      <thead><tr><th>Spare part</th><th>Description</th><th>In stock</th><th>Status</th><th></th></tr></thead><tbody>
+      ${parts.map((p) => `<tr><td>${e(humanize(p.id))}</td><td>${e(p.description)}</td><td class="mono">${p.inStock}</td>
+        <td><span class="chip ${p.reorder ? 'yellow' : 'green'}">${p.reorder ? 'Reorder' : 'In stock'}</span></td>
+        <td><button class="dbtn" data-mock="request_part" data-part="${e(p.id)}">Request</button></td></tr>`).join('')}
+      </tbody></table></div><p id="mock-msg" role="status"></p>`, { cls: 'span2 rows23 grow' })}
+    ${box('Humanoid', `${humanoidSelect()}${leds(h.integrity_flag)}
+      <p class="dos-hint">Simulated: the curve crosses the threshold when the estimated time to failure runs out, as components wear.</p>`, { cls: 'grow' })}
+  </div>`;
 }
 
 // ---------------------------------------------------------------- forms
@@ -919,16 +902,16 @@ function bindExport() {
 
 function warehouseView() {
   const rows = warehouseRows();
-  return `<p class="kicker">Mock-up data</p><h1>Warehouse availability</h1>
-    <div class="row" style="margin:18px 0"><label for="w-filter" style="margin:0">Show</label>
+  return `<h1 class="sr-only">Warehouse availability</h1><div class="dos-grid one">${box('Warehouse availability (mock-up data)', `
+    <div class="dos-seg"><label for="w-filter">Show</label>
       <select id="w-filter" style="width:auto"><option value="">Everything</option><option value="Humanoid">Humanoids</option>
       <option value="OEM_A">Spare parts OEM A</option><option value="OEM_B">Spare parts OEM B</option><option value="OEM_C">Spare parts OEM C</option><option value="OEM_D">Spare parts OEM D</option></select>
-      <span class="spacer"></span><span class="muted" id="w-count"></span></div>
-    <div class="table-scroll" style="max-height:560px"><table class="brut" id="w-table">
+      <span class="dos-hint" id="w-count"></span></div>
+    <div class="table-scroll"><table class="brut" id="w-table">
       <thead><tr><th>Kind</th><th>Item</th><th>Detail</th><th>Quantity</th><th>Status</th><th>Location</th></tr></thead>
       <tbody>${rows.map((r) => `<tr data-kind="${e(r.kind)}" data-id="${e(r.id)}"><td>${e(r.kind)}</td><td>${e(humanize(r.id))}</td><td>${e(r.kind === 'Humanoid' ? humanize(r.detail) : r.detail)}</td>
         <td class="mono">${r.qty}</td><td><span class="chip ${{ in_stock: 'green', reorder: 'yellow', maintenance: 'yellow', in_transit: 'blue', ordered: 'grey' }[r.status] || 'grey'}">${e(humanize(r.status))}</span></td><td>${e(r.location)}</td></tr>`).join('')}
-      </tbody></table></div>`;
+      </tbody></table></div>`, { cls: 'grow' })}</div>`;
 }
 
 function bindWarehouse() {
@@ -948,11 +931,11 @@ function bindWarehouse() {
 }
 
 function auditView() {
-  return `<p class="kicker">Admins only</p><h1>Audit log</h1>
-    <div class="row" style="margin:18px 0"><button class="btn small" id="audit-refresh">Refresh</button><span class="muted" id="audit-info"></span></div>
-    <div class="table-scroll" style="max-height:640px"><table class="brut">
+  return `<h1 class="sr-only">Audit log</h1><div class="dos-grid one">${box('Audit log · every dashboard action', `
+    <div class="dos-seg"><button class="dbtn" id="audit-refresh">Refresh</button><span class="dos-hint" id="audit-info"></span></div>
+    <div class="table-scroll"><table class="brut">
       <thead><tr><th>Date</th><th>Time</th><th>Account</th><th>Role</th><th>Action</th><th>Details</th></tr></thead>
-      <tbody id="audit-body"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody></table></div>`;
+      <tbody id="audit-body"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody></table></div>`, { cls: 'grow' })}</div>`;
 }
 
 async function bindAudit() {
@@ -982,9 +965,10 @@ function renderView() {
       activity: customerActivity, demo: conversation() ? customerDemo : null }[v];
     if (page) { main.innerHTML = page(); bindCustomerOverview(); return; }
   }
-  if (v === 'fleet') { main.innerHTML = logisticsOverview(); bindLogisticsOverview(); return; }
-  if (v === 'parts' && isAdmin()) { main.innerHTML = partsView(); bindSubview(); return; }
-  if (v === 'reliability' && isAdmin() && selected()) { main.innerHTML = reliabilityView(); bindSubview(); return; }
+  if (v === 'fleet' && isAdmin()) { main.innerHTML = logisticsOverview(); bindLogisticsOverview(); return; }
+  if (v === 'humanoid' && isAdmin()) { main.innerHTML = logisticsHumanoid(); bindLogisticsOverview(); return; }
+  if (v === 'reliability' && isAdmin()) { main.innerHTML = reliabilityView(); bindHumanoidSelect(); bindSubview(); return; }
+  if (readOnly() && ['account', 'extension', 'ticket', 'demo'].includes(v)) { go('overview', { log: false }); return; }
   if (v === 'account') { main.innerHTML = accountView(); bindAccount(); return; }
   if (['extension', 'ticket'].includes(v) || (isAdmin() && ['deploy', 'maintenance'].includes(v))) { main.innerHTML = mockForm(v); bindMock(v); return; }
   if (v === 'export') { main.innerHTML = exportView(); bindExport(); return; }
@@ -1002,7 +986,7 @@ function bindSubview() {
 }
 
 // Updates the live parts of the overview without rebuilding forms or the face.
-const LIVE_VIEWS = ['overview', 'fleet', 'face', 'environment', 'activity', 'demo'];
+const LIVE_VIEWS = ['overview', 'fleet', 'humanoid', 'face', 'environment', 'activity', 'demo'];
 function refreshLive() {
   if (!LIVE_VIEWS.includes(S.view)) return;
   const h = selected();
@@ -1012,7 +996,7 @@ function refreshLive() {
   const inc = $('#incidents'); if (inc && h) inc.textContent = String(incidents30(h));
   const log = $('#robot-log');
   if (log && h) log.outerHTML = robotLog(h, { gateway: isAdmin(), limit: !isAdmin() && S.view !== 'activity' ? 40 : 120 });
-  const ch = $('#events-chart-wrap'); if (ch) ch.innerHTML = isAdmin() ? eventsChart(list) : eventsChartPlain(list);
+  const ch = $('#events-chart-wrap'); if (ch) ch.innerHTML = eventsChartPlain(list);
 }
 
 // ---------------------------------------------------------------- boot

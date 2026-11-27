@@ -319,7 +319,7 @@ body.dos .dash-body { display: block; flex: 1; min-height: 0; }
 body.dos .dash-side { display: none; }
 body.dos .dash-main { height: 100%; padding: 22px 16px 14px; overflow: auto; }
 body.dos .dash-main.dos-fit { overflow: hidden; }
-body.dos .toast { top: 84px; }
+body.dos .toast { top: auto; bottom: 40px; right: 20px; }
 body.dos .loading { color: var(--dos-dim); }
 
 .dos-grid { display: grid; height: 100%; gap: 22px 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 340px; grid-template-rows: auto auto minmax(0, 1fr); }
@@ -440,3 +440,39 @@ body.dos .dos-status { padding-right: 60px; }
   body.dos .face-wrap { min-height: 260px; }
   body.dos .inject-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* console: jury mark, segmented controls, fleet matrix (logistics) */
+.dos-jury { flex: none; padding: 6px 16px; background: #e8b100; color: #14181c; font-size: 12.5px; letter-spacing: .02em; }
+.dos-jury b { margin-right: 10px; letter-spacing: .1em; }
+.dos-ro-pill { background: #14181c; color: #e8b100; padding: 2px 10px; font-weight: 700; letter-spacing: .1em; }
+.dos-ro { margin: 0; color: #e8b100; border: 1px dashed #e8b100; padding: 6px 10px; }
+body.dos.dos-readonly .dos-status { background: #e8b100; }
+.dos-grid.one { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); }
+.dos-seg { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dos-seg select { width: auto; }
+.dos-seg [role="tab"] { all: unset; cursor: pointer; padding: 3px 12px; border: 1px solid var(--dos-line); color: var(--dos-dim); }
+.dos-seg [role="tab"][aria-selected="true"] { background: var(--dos-fg); color: var(--dos-bg); border-color: var(--dos-fg); }
+.dos-seg [role="tab"]:focus-visible { outline: 2px solid var(--green); }
+body.dos .dos-matrix { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+body.dos .dos-matrix .group h3 { font: 700 12px var(--font-dos); color: var(--green); letter-spacing: .08em; text-transform: uppercase; margin: 0; }
+body.dos .unit { border: 1px solid var(--dos-line); border-radius: 0; background: transparent; color: var(--dos-fg); font-weight: 400; margin-top: 6px; padding: 5px 8px; }
+body.dos .unit:hover { background: rgba(233, 228, 212, .08); }
+body.dos .unit[aria-pressed="true"] { border-color: var(--green); box-shadow: inset 4px 0 0 var(--green); background: rgba(29, 191, 115, .12); }
+body.dos .unit .unit-name { flex: 1; min-width: 0; }
+body.dos .unit small { display: block; color: var(--dos-dim); font-size: 11px; }
+body.dos .mini-led { width: 10px; height: 10px; border: 1px solid var(--dos-fg); }
+body.dos .notice.warn { border-color: #e8b100; }
+
+/* RobotHack (event organiser) */
+.event-card { display: grid; grid-template-columns: 240px 1fr 190px; gap: 28px; align-items: center; }
+.event-card h2 { margin-bottom: 8px; }
+.event-logo img { display: block; width: 100%; height: auto; }
+.event-robot { width: 190px; height: 190px; object-fit: cover; border: var(--line) solid var(--ink); border-radius: var(--radius); }
+@media (max-width: 860px) { .event-card { grid-template-columns: 1fr; } .event-logo img { max-width: 260px; } .event-robot { width: 100%; height: auto; max-width: 320px; } }
+.site-footer .built-at, .built-at { display: inline-flex; align-items: center; gap: 10px; background: var(--cream); color: var(--ink); text-decoration: none; padding: 6px 12px; border-radius: 8px; grid-column: 1 / -1; justify-self: start; font-weight: 700; font-size: .8rem; }
+.built-at img { display: block; width: 120px; height: auto; }
+.jury-hint { display: flex; align-items: center; gap: 12px; background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; padding: 10px 12px; max-width: 560px; }
+.jury-hint img { flex: none; width: 110px; height: auto; }
+.hero-event { display: inline-flex; align-items: center; gap: 12px; margin-top: 22px; padding: 8px 14px; background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; box-shadow: var(--shadow-sm); text-decoration: none; color: var(--ink); font-weight: 800; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; }
+.hero-event img { display: block; width: 150px; height: auto; }
+.hero-event:hover { transform: translate(-1px, -1px); }
