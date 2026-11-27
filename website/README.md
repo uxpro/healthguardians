@@ -61,10 +61,12 @@ Demo injection buttons (North Clinic) ──────► public.hg_robot_even
 1. **Accounts.** In the production Supabase project (the one in `assets/js/config.js`, same as the app):
    Authentication → Users → Add user → Create new user, three times: `cc@hg.com`, `nc@hg.com`, `admin@hg.com`, each
    with the agreed demo password and **Auto Confirm User** ticked. No metadata is needed.
-2. **Database.** SQL Editor → New query → paste [`db/hg_dashboards.sql`](db/hg_dashboards.sql) → Run. It is one
-   transaction and can be run again. The last line shows which demo accounts were linked; if an account was created
-   later, run `select public.hg_link_demo_accounts();`.
+2. **Database.** SQL Editor → New query → paste [`db/hg_dashboards.sql`](db/hg_dashboards.sql) → Run. It first
+   creates `hg_events` (the app's event log) if it is missing, then the dashboards in one transaction; it can be run
+   again. The last line shows which demo accounts were linked; if an account was created later, run
+   `select public.hg_link_demo_accounts();`.
    It adds only `hg_*` tables and functions and does not change any existing table, role or policy.
+   To check the setup and see the latest app events, run [`db/check.sql`](db/check.sql).
 3. **Phone app (optional).** Sign in to the HealthGuardians app with `nc@hg.com`: its check-ins now appear on both
    dashboards as events of Humanoid OEM B UUID.
 
@@ -103,7 +105,8 @@ assets/js/dashboard.js         both dashboards
 assets/js/face.js              robotic face and check-in
 assets/js/sim.js, data.js      Central Clinic simulation, reliability model, mock-up data
 assets/js/charts.js, robot-art.js, format.js
-db/hg_dashboards.sql           tables, functions, demo data (production)
+db/hg_dashboards.sql           complete setup: app event log, tables, functions, demo data (production)
+db/check.sql                   is everything in place? latest app events
 db/test_hg_dashboards.sql      database tests; db/run-tests.sh runs them
 tests/unit.test.js             unit tests (node --test)
 tests/e2e.py                   browser tests against the real SQL on a local Postgres

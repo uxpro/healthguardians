@@ -1,3 +1,40 @@
+-- HealthGuardians: complete setup for the production project, in one paste.
+-- Creates the app's event log (hg_events) and then the dashboards. Safe to run again.
+-- Create cc@hg.com, nc@hg.com and admin@hg.com first (Authentication -> Users), or run
+-- select public.hg_link_demo_accounts(); afterwards.
+
+-- ===== Part 1: event log the app writes =====
+
+create table if not exists public.hg_events (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  session_id  uuid not null,
+  event_type  text not null check (event_type in
+                ('session_started', 'mood_answer', 'medication_answer', 'exercise_demo', 'session_completed')),
+  mode        text check (mode in ('idle', 'speaking', 'listening', 'action')),
+  question    text check (char_length(question) <= 200),
+  answer      text check (char_length(answer) <= 100),
+  details     jsonb not null default '{}'::jsonb check (jsonb_typeof(details) = 'object' and pg_column_size(details) <= 4096),
+  client_time timestamptz,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists hg_events_user_time on public.hg_events (user_id, created_at desc);
+create index if not exists hg_events_session on public.hg_events (session_id);
+
+alter table public.hg_events enable row level security;
+revoke all on public.hg_events from anon, authenticated;
+grant select, insert on public.hg_events to authenticated;
+
+drop policy if exists hg_events_insert_own on public.hg_events;
+create policy hg_events_insert_own on public.hg_events for insert to authenticated
+  with check (user_id = auth.uid() and public.current_app_role() is not null);   -- banned accounts: no role
+
+drop policy if exists hg_events_read_own on public.hg_events;
+create policy hg_events_read_own on public.hg_events for select to authenticated
+  using ((user_id = auth.uid() and public.current_app_role() is not null) or public.is_admin());
+
+-- ===== Part 2: dashboards =====
 -- Health Guardian dashboards: fleet, events, audit log and demo data.
 -- Paste into the SQL editor of the PRODUCTION project (the one the HealthGuardians app uses) and run.
 -- One transaction: if anything fails, nothing changes. Safe to run again (it updates the demo data).
