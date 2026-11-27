@@ -45,6 +45,8 @@ def setup():
                    f"on conflict (email) do update set email = excluded.email returning id;")
         USERS[email] = uid
     print('linked:', psql('select public.hg_link_demo_accounts();'))
+    # the real jury access ends on 7 Dec 2026; keep the test independent of today's date
+    psql("update public.hg_members m set access_until = now() + interval '1 day' from auth.users u where u.id = m.user_id and u.email = 'jury@hg.com';")
 
 
 A = ":'args'::jsonb"
@@ -216,6 +218,27 @@ async def login_errors(browser):
     await page.wait_for_url('**/login.html')
     check(True, 'dashboard without session goes to sign in')
     await ctx.close()
+    # RobotHack jury hint: the logo reveals the jury sign-in until the end of 7 Dec 2026 (Riga)
+    from datetime import datetime, timezone, timedelta
+    riga = timezone(timedelta(hours=2))
+    for when, open_ in [(datetime(2026, 12, 7, 23, 50, tzinfo=riga), True), (datetime(2026, 12, 8, 0, 5, tzinfo=riga), False)]:
+        ctx, page = await new_page(browser, 'jury-hint')
+        await page.clock.install(time=when)
+        await page.goto(SITE + 'login.html')
+        visible = await page.locator('#jury-hint').is_visible()
+        check(visible == open_, f'jury hint {"shown" if open_ else "hidden"} at {when.isoformat()}')
+        if open_:
+            check(not await page.locator('#jury-secret').is_visible() and 'Ro6o' not in await page.text_content('#jury-hint'), 'jury password hidden until the logo is hovered')
+            check('the end of 7 December 2026' in await page.text_content('#jury-hint'), 'jury hint names the end date')
+            await page.hover('#jury-logo')
+            await expect(page.locator('#jury-secret')).to_be_visible()
+            check('jury@hg.com · Ro6o.hack2026' in await page.text_content('#jury-cred'), 'hovering the logo reveals the jury sign-in')
+            await page.click('#jury-use')
+            check(await page.input_value('#email') == 'jury@hg.com' and await page.input_value('#password') == 'Ro6o.hack2026', 'Use it fills the form')
+            await page.screenshot(path=f'{SHOTS}/login_jury.png')
+        else:
+            check('Ro6o' not in await page.text_content('#main'), 'after the end date the password is not shown')
+        await ctx.close()
 
 
 async def north_and_admin(browser):

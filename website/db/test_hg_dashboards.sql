@@ -159,6 +159,17 @@ select public.hg_log_action('open_view', '{"view":"overview"}');
 reset role;
 select test.assert((select count(*) from public.hg_audit_log where email = 'jury@hg.com') = 0, 'jury: audit calls write nothing');
 select test.assert((select read_only from public.hg_members where user_id = 'a0000000-0000-0000-0000-0000000000c2') = false, 'nc is not read-only');
+select test.assert((select access_until from public.hg_members where user_id = 'a0000000-0000-0000-0000-0000000000d1')
+                   = '2026-12-07 22:00:00+00'::timestamptz, 'jury access ends at the end of 7 Dec 2026 (Riga)');
+-- after the end date the jury gets nothing
+update public.hg_members set access_until = now() - interval '1 second' where user_id = 'a0000000-0000-0000-0000-0000000000d1';
+select test.login('a0000000-0000-0000-0000-0000000000d1');
+set role authenticated;
+select test.assert(public.hg_whoami() is null, 'expired jury: no dashboard access');
+select test.expect_error($$select public.hg_fleet()$$, 'hg_access_denied');
+select test.expect_error($$select count(*) from public.hg_feed(now() - interval '1 day')$$, 'hg_access_denied');
+reset role;
+update public.hg_members set access_until = now() + interval '1 day' where user_id = 'a0000000-0000-0000-0000-0000000000d1';
 
 -- -------------------------------------------------------------- rate limits
 select test.login('a0000000-0000-0000-0000-0000000000c2');

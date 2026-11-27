@@ -19,8 +19,17 @@
     <h1>Sign <span class="accent">in.</span></h1>
     <p class="lead">Customers see their clinic's humanoids and events. HG logistics staff see the whole fleet.</p>
     <p class="muted">Accounts are created by HG Group. There is no public sign-up.</p>
-    <p class="jury-hint"><img src="assets/img/compact-lockup-light.png" alt="RobotHack" width="110" height="41">
-      <span><b>RobotHack jury:</b> sign in with the jury account you received. It opens the live North Clinic dashboard in a read-only view.</span></p>
+    <div class="jury-hint" id="jury-hint" hidden>
+      <button type="button" class="jury-logo" id="jury-logo" aria-expanded="false" aria-controls="jury-secret">
+        <img src="assets/img/compact-lockup-light.png" alt="RobotHack: reveal the jury password" width="120" height="45"></button>
+      <div>
+        <p><b>RobotHack jury:</b> hover over the RobotHack logo (or tap it) to reveal the jury sign-in, then press
+          <b>Use it</b> and <b>Sign in</b>. It opens the live North Clinic dashboard in a read-only view and works until
+          <span id="jury-until"></span>.</p>
+        <p class="jury-secret" id="jury-secret" hidden><span class="mono" id="jury-cred"></span>
+          <button type="button" class="btn small" id="jury-use">Use it</button></p>
+      </div>
+    </div>
   </div>
   <form class="card" id="login-form" novalidate>
     <h2>Dashboard sign in</h2>
