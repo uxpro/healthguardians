@@ -8,7 +8,25 @@ const LOOK = {
 };
 const LED = { green: '#1dbf73', yellow: '#ffd23f', red: '#f2545b' };
 
-export function robotSvg({ oem_id: oem = 'OEM_A', locomotion = 'legs', integrity_flag: flag = 'green', label = '' } = {}) {
+/**
+ * Placeholder picture of a humanoid. With { line: true } it is a technical line drawing in the current text colour
+ * (no fills), for the console style of the customer dashboard; the status LED keeps its colour.
+ */
+export function robotSvg({ oem_id: oem = 'OEM_A', locomotion = 'legs', integrity_flag: flag = 'green', label = '' } = {}, { line = false } = {}) {
+  const svg = robotFlat(oem, locomotion, flag, label);
+  if (!line) return svg;
+  const led = LED[flag] || LED.green;
+  return svg
+    .replace('<svg ', '<svg class="robot-line" ')
+    .replace(/stroke="#1d2125" stroke-width="5"/g, 'stroke="currentColor" stroke-width="3"')
+    .replace(/stroke="#1d2125" stroke-width="3"/g, 'stroke="currentColor" stroke-width="2"')
+    .replace(/fill="#1d2125"/g, 'fill="currentColor"')
+    .replace(/r="8" fill="#5aa7ea"/g, 'r="8" fill="currentColor"')       // screen eyes
+    .replace(/fill="#(fbf9f2|0b0d10|1dbf73|5aa7ea|ffd23f|9b7bf2)"/g, 'fill="none"')
+    .replace(/(<circle cx="110" cy="139" r="7" )fill="none"/, `$1fill="${led}"`);
+}
+
+function robotFlat(oem, locomotion, flag, label) {
   const look = LOOK[oem] || LOOK.OEM_A;
   const s = `stroke="${INK}" stroke-width="5" stroke-linejoin="round"`;
   let head;
